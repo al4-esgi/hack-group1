@@ -7,6 +7,7 @@ import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './_utils/config/env.config';
 import { NodemailerModule } from './nodemailer/nodemailer.module';
 import { DatabaseModule } from './database/database.module';
+import { InstagramScrapingModule } from './instagram-scraping/instagram-scraping.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { DatabaseModule } from './database/database.module';
     UsersModule,
     NodemailerModule,
     DatabaseModule,
+    InstagramScrapingModule,
   ],
   controllers: [AppController],
   providers: [AppService],
