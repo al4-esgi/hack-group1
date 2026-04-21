@@ -6,13 +6,16 @@ import { UsersModule } from './users/users.module';
 import { ConfigModule } from '@nestjs/config';
 import { validateEnv } from './_utils/config/env.config';
 import { NodemailerModule } from './nodemailer/nodemailer.module';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
+    DatabaseModule,
     ConfigModule.forRoot({ validate: validateEnv, isGlobal: true }),
     AuthModule,
     UsersModule,
     NodemailerModule,
+    DatabaseModule,
   ],
   controllers: [AppController],
   providers: [AppService],

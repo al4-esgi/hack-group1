@@ -18,7 +18,7 @@ export class EnvironmentVariables {
   JWT_EXPIRATION: string = '7d';
 
   @IsString()
-  MONGODB_URL: string = 'mongodb://127.0.0.1:27017/nest-skeleton';
+  DATABASE_URL: string;
 
   @IsString()
   @Optional()

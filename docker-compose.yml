@@ -3,6 +3,8 @@ services:
     image: postgres
     restart: always
     shm_size: 128mb
+    ports:
+      - "5432:5432"
     volumes:
       - type: tmpfs
         target: /dev/shm
@@ -12,10 +14,3 @@ services:
       POSTGRES_USER: user
       POSTGRES_PASSWORD: my-secret-pw
       POSTGRES_DB: db
-  adminer:
-    image: adminer
-    restart: always
-    ports:
-      - 8080:8080
-    depends_on:
-      - db

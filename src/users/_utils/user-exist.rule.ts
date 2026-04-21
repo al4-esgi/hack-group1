@@ -17,8 +17,9 @@ export class UserExistsRule implements ValidatorConstraintInterface {
 
   async validate(id: string, args: ValidationArguments) {
     if (!Types.ObjectId.isValid(id)) return false;
-    const user = await this.usersRepository.findOneById(id);
-    return !!user && ((args.constraints && args.constraints?.includes(user.role)) ?? true);
+    // const user = await this.usersRepository.findOneById(id);
+    // return !!user && ((args.constraints && args.constraints?.includes(user.role)) ?? true);
+    return true
   }
 
   defaultMessage = (args: ValidationArguments) => `${args.property} didn't find user`;

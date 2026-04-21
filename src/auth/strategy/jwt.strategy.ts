@@ -22,6 +22,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   validate(request: Request, payload: JwtPayloadInterface) {
-    return this.usersRepository.findOneByIdOrThrow(payload.id);
+    // return this.usersRepository.findOneByIdOrThrow(payload.id);
   }
 }

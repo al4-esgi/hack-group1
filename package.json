@@ -15,9 +15,14 @@
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
-    "lint": "eslint \"{src,apps,libs}/**/*.ts\" --fix"
+    "lint": "eslint \"{src,apps,libs}/**/*.ts\" --fix",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@effect/sql-pg": "^0.52.1",
     "@nestjs-modules/mailer": "^2.3.4",
     "@nestjs/common": "^11.1.17",
     "@nestjs/config": "^4.0.3",
@@ -34,13 +39,16 @@
     "dayjs": "^1.11.20",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",
+    "drizzle-zod": "^0.8.3",
+    "effect": "^3.21.1",
     "lodash": "^4.17.23",
     "mongoose": "^9.3.3",
     "nodemailer": "^8.0.4",
     "passport-jwt": "^4.0.1",
     "pg": "^8.20.0",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.2"
+    "rxjs": "^7.8.2",
+    "zod": "^4.3.6"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.16",

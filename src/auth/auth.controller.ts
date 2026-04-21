@@ -18,26 +18,26 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Register user.' })
   register(@Body() body: CreateUserDto) {
-    return this.usersService.createUser(body);
+    // return this.usersService.createUser(body);
   }
 
   @Post('login')
   @ApiOperation({ summary: 'Login user.' })
   login(@Body() body: LoginDto) {
-    return this.authService.login(body);
+    // return this.authService.login(body);
   }
 
   @HttpCode(204)
   @Post('recover-password')
   @ApiOperation({ summary: 'Send a mail with a recovery link.' })
   recoverAccountPassword(@Body() body: RecoverAccountPasswordDto) {
-    return this.authService.recoverAccountPassword(body);
+    // return this.authService.recoverAccountPassword(body);
   }
 
   @HttpCode(204)
   @Post('confirm-recover-password')
   @ApiOperation({ summary: 'Confirm the recover password with token' })
   confirmRecoverAccountPassword(@Body() body: ConfirmRecoverAccountPasswordDto) {
-    return this.authService.confirmRecoverAccountPassword(body);
+    // return this.authService.confirmRecoverAccountPassword(body);
   }
 }
