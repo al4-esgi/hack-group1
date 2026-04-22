@@ -3,4 +3,4 @@ export const schema = { user };
 export type Schema = typeof schema;
 export type SchemaName = keyof Schema;
 
-export type { SelectUser } from 'src/users/users.entity'
+export type { GetUserType } from 'src/users/users.entity'
