@@ -10,6 +10,7 @@ import { DatabaseModule } from './database/database.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { BootstrapService } from './bootstrap.service';
 import { HotelsModule } from './hotels/hotels.module';
+import { SearchModule } from './search/search.module';
 
 @Module({
   imports: [
@@ -19,8 +20,8 @@ import { HotelsModule } from './hotels/hotels.module';
     UsersModule,
     NodemailerModule,
     RestaurantsModule,
-    DatabaseModule,
     HotelsModule,
+    SearchModule,
   ],
   controllers: [AppController],
   providers: [AppService, BootstrapService],

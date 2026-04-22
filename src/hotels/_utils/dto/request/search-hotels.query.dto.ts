@@ -3,25 +3,12 @@ import { Transform, Type } from 'class-transformer';
 import { IsArray, IsBoolean, IsInt, IsString, Max, Min } from 'class-validator';
 import { Optional } from 'class-validator-extended';
 import { PaginatedQueryDto, SortDirection } from 'src/_utils/dto/requests/paginated-query.dto';
+import { toIdArray } from 'src/_utils/transforms/to-id-array.transform';
 
 export enum HotelSearchSortBy {
   NAME = 'name',
   CREATED_AT = 'createdAt',
 }
-
-const toIdArray = ({ value }: { value?: string | string[] }): number[] | undefined => {
-  if (value === undefined || value === null) {
-    return undefined;
-  }
-  const source = Array.isArray(value) ? value.join(',') : String(value);
-  const ids = source
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean)
-    .map(s => parseInt(s, 10))
-    .filter(n => Number.isFinite(n));
-  return ids.length ? ids : undefined;
-};
 
 export class SearchHotelsQueryDto extends PaginatedQueryDto {
   @ApiPropertyOptional({

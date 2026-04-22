@@ -12,6 +12,7 @@ import {
   varchar,
 } from "drizzle-orm/pg-core";
 import { createSelectSchema } from "drizzle-zod";
+import { geographyPoint } from "src/_shared/geo/geography-point.type";
 import { timestamps } from "src/restaurants/entities/_shared";
 import { cities } from "src/restaurants/entities/cities.entity";
 import { countries } from "src/restaurants/entities/countries.entity";
@@ -67,6 +68,7 @@ export const hotels = pgTable(
     url: varchar("url", { length: 500 }),
     policy: text("policy"),
     languages: jsonb("languages").$type<string[]>(),
+    location: geographyPoint("location"),
     ...timestamps,
   },
   (table) => [
@@ -75,6 +77,7 @@ export const hotels = pgTable(
     index("hotels_country_id_idx").on(table.countryId),
     index("hotels_name_idx").on(table.name),
     index("hotels_lat_lng_idx").on(table.lat, table.lng),
+    index("hotels_location_gist_idx").using('gist', table.location),
   ],
 );
 

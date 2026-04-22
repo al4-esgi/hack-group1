@@ -1,14 +1,14 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { DatabaseService } from 'src/database/database.service';
 import { SortDirection } from 'src/_utils/dto/requests/paginated-query.dto';
+import { AutocompleteOptionDto } from 'src/_utils/dto/responses/autocomplete-option.dto';
+import { AutocompleteHelper } from 'src/_shared/autocomplete/autocomplete.helper';
 import { GREEN_STAR_CODE, MICHELIN_STAR_CODE } from './_constants';
 import {
   RestaurantSearchSortBy,
   SearchRestaurantsQueryDto,
 } from './_utils/dto/request/search-restaurants.query.dto';
-import { AutocompleteOptionDto } from './_utils/dto/response/autocomplete-option.dto';
 import { GetRestaurantsPaginatedDto } from './_utils/dto/response/get-restaurants-paginated.dto';
 import { RestaurantDetailsDto } from './_utils/dto/response/restaurant-details.dto';
 import { RestaurantSearchItemDto } from './_utils/dto/response/restaurant-search-item.dto';
@@ -26,16 +26,12 @@ import {
 
 @Injectable()
 export class RestaurantsService {
-  /**
-   * Aggregated per-restaurant awards subquery.
-   *
-   * We pre-group awards once and LEFT JOIN it instead of issuing three correlated subqueries
-   * (stars, awardCode, hasGreenStar) per result row. Green star is demoted in the `awardCode`
-   * ordering so it's only returned when no other distinction exists.
-   */
   private readonly awardsSub: ReturnType<RestaurantsService['buildAwardsSub']>;
 
-  constructor(private readonly databaseService: DatabaseService) {
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly autocompleteHelper: AutocompleteHelper,
+  ) {
     this.awardsSub = this.buildAwardsSub();
   }
 
@@ -185,7 +181,7 @@ export class RestaurantsService {
   };
 
   autocompleteCountries = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: countries,
       idColumn: countries.id,
       nameColumn: countries.name,
@@ -198,7 +194,7 @@ export class RestaurantsService {
     limit: number,
     countryId?: number,
   ): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: cities,
       idColumn: cities.id,
       nameColumn: cities.name,
@@ -208,7 +204,7 @@ export class RestaurantsService {
     });
 
   autocompleteCuisines = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: cuisines,
       idColumn: cuisines.id,
       nameColumn: cuisines.name,
@@ -218,7 +214,7 @@ export class RestaurantsService {
     });
 
   autocompleteFacilities = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: facilities,
       idColumn: facilities.id,
       nameColumn: facilities.name,
@@ -244,7 +240,9 @@ export class RestaurantsService {
   private getTextClause = ({ search }: SearchRestaurantsQueryDto): SQL | undefined => {
     const trimmed = search?.trim();
     if (!trimmed) return undefined;
-    return or(ilike(restaurants.name, `%${trimmed}%`), ilike(restaurants.description, `%${trimmed}%`));
+    const safe = trimmed.replace(/[%_]/g, '');
+    if (!safe) return undefined;
+    return or(ilike(restaurants.name, `%${safe}%`), ilike(restaurants.description, `%${safe}%`));
   };
 
   private getCityClause = ({ cityId }: SearchRestaurantsQueryDto): SQL | undefined =>
@@ -275,11 +273,6 @@ export class RestaurantsService {
         )
       : undefined;
 
-  /**
-   * Award filter: when `minStars`/`maxStars` is set without `awardCode`, implicitly restricts
-   * to MICHELIN_STAR awards (Bib Gourmand / Selected have no stars, so the filter would always
-   * return 0 results otherwise).
-   */
   private getAwardsClause = ({ awardCode, minStars, maxStars }: SearchRestaurantsQueryDto): SQL | undefined => {
     const hasStarsFilter = minStars !== undefined || maxStars !== undefined;
     const trimmedCode = awardCode?.trim();
@@ -319,105 +312,5 @@ export class RestaurantsService {
       maxPriceLevel ? sql`${restaurants.priceLevel} <= ${maxPriceLevel}` : undefined,
     ].filter((clause): clause is SQL => Boolean(clause));
     return clauses.length > 0 ? and(...clauses) : undefined;
-  };
-
-  private autocompleteOptions = async (params: {
-    table: AnyPgTable;
-    idColumn: PgColumn;
-    nameColumn: PgColumn;
-    normalizedColumn?: PgColumn;
-    additionalWhere?: SQL;
-    q: string | undefined;
-    limit: number;
-  }): Promise<AutocompleteOptionDto[]> => {
-    const { table, idColumn, nameColumn, normalizedColumn, additionalWhere, q, limit } = params;
-    const safe = this.getSafeAutocompleteTerm(q);
-    const pattern = safe ? `%${safe}%` : undefined;
-
-    const nameMatch = pattern
-      ? normalizedColumn
-        ? or(ilike(nameColumn, pattern), ilike(normalizedColumn, pattern))
-        : ilike(nameColumn, pattern)
-      : undefined;
-    const whereExpr = and(...[additionalWhere, nameMatch].filter((clause): clause is SQL => Boolean(clause)));
-
-    const base = this.databaseService.db
-      .select({ id: idColumn, name: nameColumn })
-      .from(table)
-      .where(whereExpr);
-
-    const query = safe
-      ? base.orderBy(
-          asc(this.autocompleteNameMatchPriority(nameColumn, safe, { normalizedColumn })),
-          asc(nameColumn),
-        )
-      : base.orderBy(asc(nameColumn));
-
-    const rows = await query.limit(limit);
-    return rows.map(row => ({ id: row.id as number, name: row.name as string }));
-  };
-
-  private getSafeAutocompleteTerm = (q: string | undefined): string | undefined => {
-    const trimmed = q?.trim();
-    if (!trimmed) return undefined;
-    const safe = trimmed.replace(/[%_]/g, '').slice(0, 100);
-    return safe || undefined;
-  };
-
-  /**
-   * 0 = whole label or any token (split on spaces / commas / slashes / hyphens) starts with the term
-   * 1 = contains term but no "prefix" match (neither on full string nor on a word)
-   * 2 = fallback
-   */
-  private autocompleteNameTokensStartWith = (nameColumn: PgColumn, prefix: string): SQL =>
-    sql`EXISTS (
-      SELECT 1
-      FROM unnest(
-        string_to_array(
-          trim(
-            regexp_replace(
-              regexp_replace(cast(${nameColumn} as text), E'[,\\-–—/]+', ' ', 'g'),
-              E'\\s+',
-              ' ',
-              'g'
-            )
-          ),
-          ' '
-        )
-      ) AS t(token)
-      WHERE btrim(t.token) <> '' AND t.token ILIKE ${prefix}
-    )`;
-
-  private autocompleteNameMatchPriority = (
-    nameColumn: PgColumn,
-    safe: string,
-    options?: { normalizedColumn?: PgColumn },
-  ): SQL => {
-    const prefix = `${safe}%`;
-    const contains = `%${safe}%`;
-    const norm = options?.normalizedColumn;
-    if (norm) {
-      return sql`(
-        CASE
-          WHEN ${nameColumn} ILIKE ${prefix}
-            OR ${norm} ILIKE ${prefix}
-            OR ${this.autocompleteNameTokensStartWith(nameColumn, prefix)}
-            OR ${this.autocompleteNameTokensStartWith(norm, prefix)}
-          THEN 0
-          WHEN ${nameColumn} ILIKE ${contains} OR ${norm} ILIKE ${contains}
-          THEN 1
-          ELSE 2
-        END
-      )`;
-    }
-    return sql`(
-      CASE
-        WHEN ${nameColumn} ILIKE ${prefix} OR ${this.autocompleteNameTokensStartWith(nameColumn, prefix)}
-        THEN 0
-        WHEN ${nameColumn} ILIKE ${contains}
-        THEN 1
-        ELSE 2
-      END
-    )`;
   };
 }

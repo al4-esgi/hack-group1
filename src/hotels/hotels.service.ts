@@ -1,23 +1,25 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, or, sql, type SQL } from 'drizzle-orm';
-import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { DatabaseService } from 'src/database/database.service';
 import { SortDirection } from 'src/_utils/dto/requests/paginated-query.dto';
+import { AutocompleteOptionDto } from 'src/_utils/dto/responses/autocomplete-option.dto';
+import { AutocompleteHelper } from 'src/_shared/autocomplete/autocomplete.helper';
 import { cities } from 'src/restaurants/entities/cities.entity';
 import { countries } from 'src/restaurants/entities/countries.entity';
 import { hotelAmenities } from './hotel-amenities.entity';
 import { hotelHotelAmenities } from './hotel-hotel-amenities.entity';
 import { hotels } from './hotels.entity';
-import { AutocompleteQueryDto } from './_utils/dto/request/autocomplete.query.dto';
 import { HotelSearchSortBy, SearchHotelsQueryDto } from './_utils/dto/request/search-hotels.query.dto';
-import { AutocompleteOptionDto } from './_utils/dto/response/autocomplete-option.dto';
 import { GetHotelsPaginatedDto } from './_utils/dto/response/get-hotels-paginated.dto';
 import { HotelDetailsDto } from './_utils/dto/response/hotel-details.dto';
 import { HotelSearchItemDto } from './_utils/dto/response/hotel-search-item.dto';
 
 @Injectable()
 export class HotelsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  constructor(
+    private readonly databaseService: DatabaseService,
+    private readonly autocompleteHelper: AutocompleteHelper,
+  ) {}
 
   private readonly amenitiesAggSql = sql<string[]>`coalesce((
     SELECT array_agg(${hotelAmenities.name} ORDER BY ${hotelAmenities.name})
@@ -139,7 +141,7 @@ export class HotelsService {
   };
 
   autocompleteCountries = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: countries,
       idColumn: countries.id,
       nameColumn: countries.name,
@@ -152,7 +154,7 @@ export class HotelsService {
     limit: number,
     countryId?: number,
   ): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: cities,
       idColumn: cities.id,
       nameColumn: cities.name,
@@ -162,7 +164,7 @@ export class HotelsService {
     });
 
   autocompleteAmenities = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
-    this.autocompleteOptions({
+    this.autocompleteHelper.autocompleteOptions({
       table: hotelAmenities,
       idColumn: hotelAmenities.id,
       nameColumn: hotelAmenities.name,
@@ -174,7 +176,9 @@ export class HotelsService {
   private getTextClause = ({ search }: SearchHotelsQueryDto): SQL | undefined => {
     const trimmed = search?.trim();
     if (!trimmed) return undefined;
-    return or(ilike(hotels.name, `%${trimmed}%`), ilike(hotels.content, `%${trimmed}%`));
+    const safe = trimmed.replace(/[%_]/g, '');
+    if (!safe) return undefined;
+    return or(ilike(hotels.name, `%${safe}%`), ilike(hotels.content, `%${safe}%`));
   };
 
   private getCityClause = ({ cityId }: SearchHotelsQueryDto): SQL | undefined =>
@@ -206,100 +210,5 @@ export class HotelsService {
   private getDistinctionClause = ({ distinction }: SearchHotelsQueryDto): SQL | undefined => {
     const trimmed = distinction?.trim();
     return trimmed ? eq(hotels.distinctions, trimmed) : undefined;
-  };
-
-  private autocompleteOptions = async (params: {
-    table: AnyPgTable;
-    idColumn: PgColumn;
-    nameColumn: PgColumn;
-    normalizedColumn?: PgColumn;
-    additionalWhere?: SQL;
-    q: string | undefined;
-    limit: number;
-  }): Promise<AutocompleteOptionDto[]> => {
-    const { table, idColumn, nameColumn, normalizedColumn, additionalWhere, q, limit } = params;
-    const safe = this.getSafeAutocompleteTerm(q);
-    const pattern = safe ? `%${safe}%` : undefined;
-
-    const nameMatch = pattern
-      ? normalizedColumn
-        ? or(ilike(nameColumn, pattern), ilike(normalizedColumn, pattern))
-        : ilike(nameColumn, pattern)
-      : undefined;
-    const whereExpr = and(...[additionalWhere, nameMatch].filter((clause): clause is SQL => Boolean(clause)));
-
-    const base = this.databaseService.db
-      .select({ id: idColumn, name: nameColumn })
-      .from(table)
-      .where(whereExpr);
-
-    const query = safe
-      ? base.orderBy(
-          asc(this.autocompleteNameMatchPriority(nameColumn, safe, { normalizedColumn })),
-          asc(nameColumn),
-        )
-      : base.orderBy(asc(nameColumn));
-
-    const rows = await query.limit(limit);
-    return rows.map(row => ({ id: row.id as number, name: row.name as string }));
-  };
-
-  private getSafeAutocompleteTerm = (q: string | undefined): string | undefined => {
-    const trimmed = q?.trim();
-    if (!trimmed) return undefined;
-    const safe = trimmed.replace(/[%_]/g, '').slice(0, 100);
-    return safe || undefined;
-  };
-
-  private autocompleteNameTokensStartWith = (nameColumn: PgColumn, prefix: string): SQL =>
-    sql`EXISTS (
-      SELECT 1
-      FROM unnest(
-        string_to_array(
-          trim(
-            regexp_replace(
-              regexp_replace(cast(${nameColumn} as text), E'[,\\-–—/]+', ' ', 'g'),
-              E'\\s+',
-              ' ',
-              'g'
-            )
-          ),
-          ' '
-        )
-      ) AS t(token)
-      WHERE btrim(t.token) <> '' AND t.token ILIKE ${prefix}
-    )`;
-
-  private autocompleteNameMatchPriority = (
-    nameColumn: PgColumn,
-    safe: string,
-    options?: { normalizedColumn?: PgColumn },
-  ): SQL => {
-    const prefix = `${safe}%`;
-    const contains = `%${safe}%`;
-    const norm = options?.normalizedColumn;
-    if (norm) {
-      return sql`(
-        CASE
-          WHEN ${nameColumn} ILIKE ${prefix}
-            OR ${norm} ILIKE ${prefix}
-            OR ${this.autocompleteNameTokensStartWith(nameColumn, prefix)}
-            OR ${this.autocompleteNameTokensStartWith(norm, prefix)}
-          THEN 0
-          WHEN ${nameColumn} ILIKE ${contains} OR ${norm} ILIKE ${contains}
-          THEN 1
-          ELSE 2
-        END
-      )`;
-    }
-    return sql`(
-      CASE
-        WHEN ${nameColumn} ILIKE ${prefix} OR ${this.autocompleteNameTokensStartWith(nameColumn, prefix)}
-        THEN 0
-        WHEN ${nameColumn} ILIKE ${contains}
-        THEN 1
-        ELSE 2
-      END
-    )`;
   };
 }

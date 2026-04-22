@@ -1,9 +1,1 @@
-import { ApiProperty } from '@nestjs/swagger';
-
-export class AutocompleteOptionDto {
-  @ApiProperty({ example: 12 })
-  id: number;
-
-  @ApiProperty({ example: 'France' })
-  name: string;
-}
+export { AutocompleteOptionDto } from 'src/_utils/dto/responses/autocomplete-option.dto';

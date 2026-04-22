@@ -1,17 +1,18 @@
 services:
   db:
-    image: postgres
+    image: postgis/postgis:17-3.5
     restart: always
     shm_size: 128mb
     env_file:
       - .env
     ports:
-      - '${POSTGRES_PORT:-5432}:5432'
+      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - type: tmpfs
         target: /dev/shm
         tmpfs:
           size: 134217728
+      - ./db/init.sql:/docker-entrypoint-initdb.d/01-extensions.sql
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}

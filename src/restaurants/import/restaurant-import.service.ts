@@ -83,6 +83,7 @@ export class RestaurantImportService {
     };
 
     try {
+      this.logger.log(`Starting restaurant import (${sourceName}, ${stats.rowsRead} rows)...`);
       this.resetCaches();
       await this.preloadTaxonomyCaches();
       await this.seedOfficialCuisines();
@@ -138,6 +139,7 @@ export class RestaurantImportService {
         try {
           const upsertedCount = await this.persistBatch(batch);
           stats.restaurantsUpserted += upsertedCount;
+          this.logger.log(`Upserted ${stats.restaurantsUpserted} restaurants...`);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);
           stats.skipped += batch.length;
@@ -157,7 +159,7 @@ export class RestaurantImportService {
         message: warnings.length ? warnings.join(' | ') : null,
       });
       this.logger.log(
-        `Import done. rows=${stats.rowsRead} upserted=${stats.restaurantsUpserted} skipped=${stats.skipped} unknownCuisines=${stats.unknownCuisines}`,
+        `Restaurant import complete. rows=${stats.rowsRead} upserted=${stats.restaurantsUpserted} skipped=${stats.skipped} unknownCuisines=${stats.unknownCuisines}`,
       );
       return stats;
     } catch (error) {
