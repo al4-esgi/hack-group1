@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { BadRequestException, Injectable } from "@nestjs/common";
 import { UsersMapper } from "./users.mapper";
 import { UsersRepository } from "./users.repository";
 import { UserPaginatedQueryDto } from "./_utils/dto/request/user-paginated-query.dto";
@@ -13,6 +13,9 @@ export class UsersService {
 
 	getUserById(id: number | string) {
 		const intId = typeof id === "string" ? parseInt(id, 10) : id;
+		if (isNaN(intId)) {
+			throw new BadRequestException("Invalid user ID");
+		}
 		return this.usersRepository.findById(intId);
 	}
 
@@ -22,7 +25,7 @@ export class UsersService {
 	//     .then(x => this.usersMapper.toGetUsersPaginatedDto(userPaginatedQuery, x.results, x.totalCount));
 
 	getUser(user: GetUserType) {
-	  return this.usersMapper.toGetUserDto(user);
+		return this.usersMapper.toGetUserDto(user);
 	}
 	//
 	// deleteUser = (user: UserDocument) => this.usersRepository.deleteUser(user);

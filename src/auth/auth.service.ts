@@ -16,7 +16,7 @@ export class AuthService {
     const payload: JwtPayloadInterface = {
       email: user.email,
       id: user.id.toString(),
-      role: UserRoleEnum.USER,
+      role: user.role,
     };
     return this.jwtService.sign(payload);
   }
