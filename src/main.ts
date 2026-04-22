@@ -7,7 +7,6 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { EnvironmentVariables } from './_utils/config/env.config';
 import SwaggerCustomOptionsConfig from './_utils/config/swagger-custom-options.config';
 import ValidationPipeOptionsConfig from './_utils/config/validation-pipe-options.config';
-import { BootstrapService } from './bootstrap.service';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -26,11 +25,8 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/doc', app, document, SwaggerCustomOptionsConfig);
 
-  const bootstrapService = app.get(BootstrapService);
-  await bootstrapService.run();
-
   const configService = app.get(ConfigService<EnvironmentVariables, true>);
-  return app.listen(configService.get('PORT'));
+  await app.listen(configService.get('PORT'));
 }
 
 void bootstrap();
