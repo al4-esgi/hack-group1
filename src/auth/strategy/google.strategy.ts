@@ -3,11 +3,13 @@ import { ConfigService } from "@nestjs/config";
 import { PassportStrategy } from "@nestjs/passport";
 import { Strategy, Profile, VerifyCallback } from "passport-google-oauth20";
 import { EnvironmentVariables } from "../../_utils/config/env.config";
+import { UsersService } from "src/users/users.service";
 
 @Injectable()
 export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
 	constructor(
 		private readonly configService: ConfigService<EnvironmentVariables, true>,
+		private readonly usersService: UsersService
 	) {
 		const clientID = configService.get("GOOGLE_CLIENT_ID");
 		const clientSecret = configService.get("GOOGLE_CLIENT_SECRET");
@@ -26,18 +28,13 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
 	}
 
 	async validate(
-		accessToken: string,
-		refreshToken: string,
+		_accessToken: string,
+		_refreshToken: string,
 		profile: Profile,
 		done: VerifyCallback,
 	): Promise<any> {
-		const { name, emails, id } = profile;
-		const user = {
-			googleId: id,
-			email: emails?.[0]?.value || "",
-			firstname: name?.givenName || "",
-			lastname: name?.familyName || "",
-		};
+    const user = this.usersService.upsertUserFromGoogle(profile)
+
 		done(null, user);
 	}
 }

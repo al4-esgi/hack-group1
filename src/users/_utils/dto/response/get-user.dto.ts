@@ -1,16 +1,18 @@
-import { UserRoleEnum } from '../../user-role.enum';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty } from "@nestjs/swagger";
 
 export class GetUserDto {
-  @ApiProperty()
-  id: string;
+	@ApiProperty()
+	id: string;
 
-  @ApiProperty()
-  firstname: string;
+	@ApiProperty()
+	firstname: string;
 
-  @ApiProperty()
-  lastname: string;
+	@ApiProperty()
+	lastname: string;
 
-  @ApiProperty()
-  email: string;
+	@ApiProperty()
+	email: string;
+
+	@ApiProperty({ required: false, nullable: true })
+	photoUrl: string | null;
 }

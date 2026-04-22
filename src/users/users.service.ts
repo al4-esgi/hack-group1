@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
 import { UsersMapper } from "./users.mapper";
 import { UsersRepository } from "./users.repository";
-import { UserPaginatedQueryDto } from "./_utils/dto/request/user-paginated-query.dto";
 import { GetUserType } from "./users.entity";
+import { Profile } from "passport-google-oauth20";
 
 @Injectable()
 export class UsersService {
@@ -17,6 +17,14 @@ export class UsersService {
 			throw new BadRequestException("Invalid user ID");
 		}
 		return this.usersRepository.findById(intId);
+	}
+   upsertUserFromGoogle(profile : Profile){
+     const userToCreate = this.usersMapper.toCreateUserFromGoogleProfile(profile)
+    return  this.usersRepository.upsertGoogleUser(userToCreate)
+   }
+    
+	getUserByGoogleId(id: string) {
+		return this.usersRepository.findByGoogleId(id);
 	}
 
 	// getUsersPaginated = (userPaginatedQuery: UserPaginatedQueryDto) =>

@@ -3,6 +3,7 @@ import { schema } from "src/database/database.schema";
 import { DatabaseService } from "src/database/database.service";
 import { eq } from "drizzle-orm";
 import { UserRoleEnum } from "./_utils/user-role.enum";
+import { CreateUser } from "./_utils/types/create-user.types";
 
 @Injectable()
 export class UsersRepository {
@@ -32,24 +33,29 @@ export class UsersRepository {
     return users[0] || null;
   }
 
-  async createGoogleUser(profile: {
-    googleId: string;
-    email: string;
-    firstname: string;
-    lastname: string;
-  }) {
-    return this.databaseService.db
-      .insert(schema.user)
-      .values({
-        email: profile.email,
-        firstname: profile.firstname,
-        lastname: profile.lastname || "",
-        google_id: profile.googleId,
-        role: UserRoleEnum.USER
-      })
-      .returning()
-      .then((users) => users[0]);
-  }
+  async upsertGoogleUser(params: CreateUser) {
+      return this.databaseService.db
+    .insert(schema.user)
+    .values({
+      email: params.email,
+      firstname: params.firstname,
+      lastname: params.lastname || "",
+      google_id: params.googleId,
+      photo_url: params.photoUrl,
+      role: UserRoleEnum.USER
+    })
+    .onConflictDoUpdate({
+      target: schema.user.google_id,
+      set: {
+        email: params.email,
+        firstname: params.firstname,
+        lastname: params.lastname || "",
+        photo_url: params.photoUrl,
+      }
+    })
+    .returning()
+    .then((users) => users[0]);
+}
 
   // deleteUser = (userToDelete: UserDocument) =>
   //   this.model.findByIdAndUpdate(userToDelete._id, { deletedAt: new Date() }).exec();

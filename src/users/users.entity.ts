@@ -21,7 +21,8 @@ export const user = pgTable("user", {
 	email: varchar().notNull(),
 	firstname: varchar().notNull(),
 	lastname: varchar().notNull(),
-	google_id: varchar(),
+	google_id: varchar().unique(),
+	photo_url: varchar(),
 	role: roleEnum().notNull().default(UserRoleEnum.USER),
 	...timestamps,
 });
