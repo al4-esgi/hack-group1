@@ -1,5 +1,5 @@
 {
-  "id": "5c7fb9a5-9f6e-4899-a3a4-46f90939994c",
+  "id": "30b864a0-eb45-4f7d-b4d3-47753a8d18d1",
   "prevId": "1c89a0d8-a5ea-4600-835e-48010592dc25",
   "version": "7",
   "dialect": "postgresql",
@@ -13,12 +13,6 @@
           "type": "serial",
           "primaryKey": true,
           "notNull": true
-        },
-        "password": {
-          "name": "password",
-          "type": "varchar",
-          "primaryKey": false,
-          "notNull": false
         },
         "email": {
           "name": "email",
@@ -38,11 +32,19 @@
           "primaryKey": false,
           "notNull": true
         },
-        "googleId": {
-          "name": "googleId",
+        "google_id": {
+          "name": "google_id",
           "type": "varchar",
           "primaryKey": false,
           "notNull": false
+        },
+        "role": {
+          "name": "role",
+          "type": "role",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'USER'"
         },
         "created_at": {
           "name": "created_at",
@@ -68,7 +70,16 @@
       "isRLSEnabled": false
     }
   },
-  "enums": {},
+  "enums": {
+    "public.role": {
+      "name": "role",
+      "schema": "public",
+      "values": [
+        "USER",
+        "ADMIN"
+      ]
+    }
+  },
   "schemas": {},
   "sequences": {},
   "roles": {},

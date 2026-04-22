@@ -1,1 +1,0 @@
-ALTER TABLE "user" RENAME COLUMN "googleId" TO "google_id";
