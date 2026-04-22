@@ -1,6 +1,8 @@
 import { createReadStream } from 'fs';
 import readline from 'readline';
 
+const BOM = '\uFEFF';
+
 const parseCsvLine = (line: string): string[] => {
   const values: string[] = [];
   let current = '';
@@ -29,14 +31,24 @@ const parseCsvLine = (line: string): string[] => {
   return values;
 };
 
+const stripTrailingCr = (value: string): string => (value.endsWith('\r') ? value.slice(0, -1) : value);
+
 export const readCsvAsObjects = async (filePath: string): Promise<Record<string, string>[]> => {
   const stream = createReadStream(filePath, { encoding: 'utf-8' });
   const rl = readline.createInterface({ input: stream, crlfDelay: Infinity });
   const rows: string[][] = [];
   let pending = '';
   let quoteCount = 0;
+  let isFirstLine = true;
 
-  for await (const line of rl) {
+  for await (const rawLine of rl) {
+    let line = stripTrailingCr(rawLine);
+    if (isFirstLine) {
+      if (line.startsWith(BOM)) {
+        line = line.slice(BOM.length);
+      }
+      isFirstLine = false;
+    }
     pending = pending ? `${pending}\n${line}` : line;
     quoteCount += (line.match(/"/g) || []).length;
     if (quoteCount % 2 !== 0) continue;
@@ -56,4 +68,3 @@ export const readCsvAsObjects = async (filePath: string): Promise<Record<string,
     return obj;
   });
 };
-

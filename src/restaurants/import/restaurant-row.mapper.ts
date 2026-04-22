@@ -1,22 +1,25 @@
+import { type MainAwardCode } from 'src/restaurants/_constants';
 import { normalizeAward, normalizeKey, normalizeLabel, normalizeLocation, normalizePrice, splitCommaList } from './normalizers';
 
 export type RestaurantRowMapped = {
   name: string;
   address: string;
-  location: { city: string; country: string };
-  rankPrice: number;
+  location: { city: string; country: string | null };
+  priceLevel: number | null;
   cuisines: string[];
   longitude: string;
   latitude: string;
   phoneNumber: string | null;
   sourceUrl: string;
   websiteUrl: string | null;
-  award: { code: 'MICHELIN_STAR' | 'BIB_GOURMAND' | 'SELECTED'; starsCount: 1 | 2 | 3 | null };
+  award: { code: MainAwardCode; starsCount: 1 | 2 | 3 | null };
   greenStar: boolean;
   facilities: string[];
   description: string;
   normalizedCuisineKeys: string[];
 };
+
+const GREEN_STAR_TRUE_VALUES = new Set(['1', 'true', 'yes', 'y', 'oui']);
 
 export const mapRestaurantRow = (row: Record<string, string>): RestaurantRowMapped => {
   const cuisines = splitCommaList(row.Cuisine);
@@ -24,7 +27,7 @@ export const mapRestaurantRow = (row: Record<string, string>): RestaurantRowMapp
     name: normalizeLabel(row.Name),
     address: normalizeLabel(row.Address),
     location: normalizeLocation(row.Location),
-    rankPrice: normalizePrice(row.Price),
+    priceLevel: normalizePrice(row.Price),
     cuisines,
     longitude: normalizeLabel(row.Longitude),
     latitude: normalizeLabel(row.Latitude),
@@ -32,10 +35,9 @@ export const mapRestaurantRow = (row: Record<string, string>): RestaurantRowMapp
     sourceUrl: normalizeLabel(row.Url),
     websiteUrl: row.WebsiteUrl ? normalizeLabel(row.WebsiteUrl) : null,
     award: normalizeAward(row.Award),
-    greenStar: normalizeLabel(row.GreenStar) === '1',
+    greenStar: GREEN_STAR_TRUE_VALUES.has(normalizeLabel(row.GreenStar).toLowerCase()),
     facilities: splitCommaList(row.FacilitiesAndServices),
     description: row.Description?.trim() ?? '',
     normalizedCuisineKeys: cuisines.map(normalizeKey),
   };
 };
-

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { check, index, integer, pgTable, serial } from 'drizzle-orm/pg-core';
+import { check, index, integer, pgTable, serial, unique } from 'drizzle-orm/pg-core';
 import { awardTypes } from './award-types.entity';
 import { restaurants } from './restaurants.entity';
 import { timestamps } from './_shared';
@@ -22,6 +22,7 @@ export const restaurantAwards = pgTable(
       'restaurant_awards_stars_coherence_check',
       sql`${table.starsCount} IS NULL OR ${table.starsCount} IN (1, 2, 3)`,
     ),
+    unique('restaurant_awards_restaurant_id_award_type_id_unique').on(table.restaurantId, table.awardTypeId),
     index('restaurant_awards_award_type_id_idx').on(table.awardTypeId),
   ],
 );

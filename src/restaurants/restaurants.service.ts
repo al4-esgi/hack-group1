@@ -1,11 +1,17 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { and, asc, desc, eq, ilike, inArray, notInArray, or, sql, type SQL } from 'drizzle-orm';
-import type { PgColumn } from 'drizzle-orm/pg-core';
+import type { AnyPgTable, PgColumn } from 'drizzle-orm/pg-core';
 import { DatabaseService } from 'src/database/database.service';
 import { SortDirection } from 'src/_utils/dto/requests/paginated-query.dto';
-import { SearchRestaurantsQueryDto } from './_utils/dto/request/search-restaurants.query.dto';
+import { GREEN_STAR_CODE, MICHELIN_STAR_CODE } from './_constants';
+import {
+  RestaurantSearchSortBy,
+  SearchRestaurantsQueryDto,
+} from './_utils/dto/request/search-restaurants.query.dto';
 import { AutocompleteOptionDto } from './_utils/dto/response/autocomplete-option.dto';
 import { GetRestaurantsPaginatedDto } from './_utils/dto/response/get-restaurants-paginated.dto';
+import { RestaurantDetailsDto } from './_utils/dto/response/restaurant-details.dto';
+import { RestaurantSearchItemDto } from './_utils/dto/response/restaurant-search-item.dto';
 import {
   awardTypes,
   cities,
@@ -20,9 +26,35 @@ import {
 
 @Injectable()
 export class RestaurantsService {
-  constructor(private readonly databaseService: DatabaseService) {}
+  /**
+   * Aggregated per-restaurant awards subquery.
+   *
+   * We pre-group awards once and LEFT JOIN it instead of issuing three correlated subqueries
+   * (stars, awardCode, hasGreenStar) per result row. Green star is demoted in the `awardCode`
+   * ordering so it's only returned when no other distinction exists.
+   */
+  private readonly awardsSub: ReturnType<RestaurantsService['buildAwardsSub']>;
 
-  searchRestaurants = async (query: SearchRestaurantsQueryDto) => {
+  constructor(private readonly databaseService: DatabaseService) {
+    this.awardsSub = this.buildAwardsSub();
+  }
+
+  private buildAwardsSub = () =>
+    this.databaseService.db
+      .select({
+        restaurantId: restaurantAwards.restaurantId,
+        stars: sql<number | null>`MAX(${restaurantAwards.starsCount})`.as('stars'),
+        awardCode: sql<string | null>`(
+          ARRAY_AGG(${awardTypes.code} ORDER BY CASE WHEN ${awardTypes.code} = ${GREEN_STAR_CODE} THEN 1 ELSE 0 END, ${awardTypes.code})
+        )[1]`.as('award_code'),
+        hasGreenStar: sql<boolean>`BOOL_OR(${awardTypes.code} = ${GREEN_STAR_CODE})`.as('has_green_star'),
+      })
+      .from(restaurantAwards)
+      .innerJoin(awardTypes, eq(awardTypes.id, restaurantAwards.awardTypeId))
+      .groupBy(restaurantAwards.restaurantId)
+      .as('awards_sub');
+
+  searchRestaurants = async (query: SearchRestaurantsQueryDto): Promise<GetRestaurantsPaginatedDto> => {
     const whereClauses = [
       this.getTextClause(query),
       this.getCityClause(query),
@@ -32,17 +64,26 @@ export class RestaurantsService {
       this.getAwardsClause(query),
       this.getGreenStarClause(query),
       this.getPricesClause(query),
-    ].filter(Boolean);
-
+    ].filter((clause): clause is SQL => Boolean(clause));
     const whereExpression = whereClauses.length > 0 ? and(...whereClauses) : undefined;
+
     const sortAsc = query.sortDirection === SortDirection.ASC;
     const orderByDir = sortAsc ? asc : desc;
+    const starsNullsLast = sortAsc
+      ? sql`${this.awardsSub.stars} ASC NULLS LAST`
+      : sql`${this.awardsSub.stars} DESC NULLS LAST`;
 
-    const starsForSort = sql<number | null>`(
-      SELECT max(${restaurantAwards.starsCount})
-      FROM ${restaurantAwards}
-      WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
-    )`;
+    const orderByClause = (() => {
+      switch (query.sortBy) {
+        case RestaurantSearchSortBy.CREATED_AT:
+          return orderByDir(restaurants.createdAt);
+        case RestaurantSearchSortBy.STARS:
+          return starsNullsLast;
+        case RestaurantSearchSortBy.NAME:
+        default:
+          return orderByDir(restaurants.name);
+      }
+    })();
 
     const totalQuery = this.databaseService.db
       .select({ count: sql<number>`count(*)` })
@@ -50,27 +91,6 @@ export class RestaurantsService {
       .innerJoin(cities, eq(cities.id, restaurants.cityId))
       .innerJoin(countries, eq(countries.id, cities.countryId))
       .where(whereExpression);
-
-    const hasGreenStarSql = sql<boolean>`coalesce((
-      SELECT bool_or(${awardTypes.code} = 'GREEN_STAR')
-      FROM ${restaurantAwards}
-      INNER JOIN ${awardTypes} ON ${awardTypes.id} = ${restaurantAwards.awardTypeId}
-      WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
-    ), false)`;
-
-    const cuisinesAgg = sql<string[]>`coalesce((
-      SELECT array_agg(${cuisines.name} ORDER BY ${cuisines.name})
-      FROM ${restaurantCuisines}
-      INNER JOIN ${cuisines} ON ${cuisines.id} = ${restaurantCuisines.cuisineId}
-      WHERE ${restaurantCuisines.restaurantId} = ${restaurants.id}
-    ), ARRAY[]::text[])`;
-
-    const facilitiesAgg = sql<string[]>`coalesce((
-      SELECT array_agg(${facilities.name} ORDER BY ${facilities.name})
-      FROM ${restaurantFacilities}
-      INNER JOIN ${facilities} ON ${facilities.id} = ${restaurantFacilities.facilityId}
-      WHERE ${restaurantFacilities.restaurantId} = ${restaurants.id}
-    ), ARRAY[]::text[])`;
 
     const rowsQuery = this.databaseService.db
       .select({
@@ -86,48 +106,262 @@ export class RestaurantsService {
         createdAt: restaurants.createdAt,
         city: cities.name,
         country: countries.name,
-        stars: sql<number | null>`(
-          SELECT max(${restaurantAwards.starsCount})
-          FROM ${restaurantAwards}
-          WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
-        )`,
-        hasGreenStar: hasGreenStarSql,
-        cuisines: cuisinesAgg,
-        facilities: facilitiesAgg,
+        awardCode: this.awardsSub.awardCode,
+        stars: this.awardsSub.stars,
+        hasGreenStar: sql<boolean>`coalesce(${this.awardsSub.hasGreenStar}, false)`,
+        cuisines: this.cuisinesAggSql,
+        facilities: this.facilitiesAggSql,
         priceLevel: restaurants.priceLevel,
       })
       .from(restaurants)
       .innerJoin(cities, eq(cities.id, restaurants.cityId))
       .innerJoin(countries, eq(countries.id, cities.countryId))
+      .leftJoin(this.awardsSub, eq(this.awardsSub.restaurantId, restaurants.id))
       .where(whereExpression)
-      .orderBy(
-        query.sortBy === 'createdAt'
-          ? orderByDir(restaurants.createdAt)
-          : query.sortBy === 'stars'
-            ? orderByDir(starsForSort)
-            : orderByDir(restaurants.name),
-        asc(restaurants.id),
-      )
+      .orderBy(orderByClause, asc(restaurants.id))
       .limit(query.limit)
       .offset(query.skip);
 
     const [totalRows, rows] = await Promise.all([totalQuery, rowsQuery]);
 
-    return new GetRestaurantsPaginatedDto(rows, query, totalRows[0]?.count ?? 0);
+    return new GetRestaurantsPaginatedDto(
+      rows as RestaurantSearchItemDto[],
+      query,
+      totalRows[0]?.count ?? 0,
+    );
   };
 
-  private getSafeAutocompleteTerm = (q: string | undefined) => {
-    const trimmed = q?.trim();
-    if (!trimmed) {
-      return undefined;
+  getRestaurantById = async (id: number): Promise<RestaurantDetailsDto> => {
+    const [result] = await this.databaseService.db
+      .select({
+        id: restaurants.id,
+        name: restaurants.name,
+        address: restaurants.address,
+        description: restaurants.description,
+        sourceUrl: restaurants.sourceUrl,
+        websiteUrl: restaurants.websiteUrl,
+        latitude: restaurants.latitude,
+        longitude: restaurants.longitude,
+        phoneNumber: restaurants.phoneNumber,
+        createdAt: restaurants.createdAt,
+        cityId: cities.id,
+        city: cities.name,
+        countryId: countries.id,
+        country: countries.name,
+        awardCode: sql<string | null>`(
+          SELECT ${awardTypes.code}
+          FROM ${restaurantAwards}
+          INNER JOIN ${awardTypes} ON ${awardTypes.id} = ${restaurantAwards.awardTypeId}
+          WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
+          ORDER BY CASE WHEN ${awardTypes.code} = ${GREEN_STAR_CODE} THEN 1 ELSE 0 END, ${awardTypes.code}
+          LIMIT 1
+        )`,
+        stars: sql<number | null>`(
+          SELECT MAX(${restaurantAwards.starsCount})
+          FROM ${restaurantAwards}
+          WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
+        )`,
+        hasGreenStar: sql<boolean>`coalesce((
+          SELECT BOOL_OR(${awardTypes.code} = ${GREEN_STAR_CODE})
+          FROM ${restaurantAwards}
+          INNER JOIN ${awardTypes} ON ${awardTypes.id} = ${restaurantAwards.awardTypeId}
+          WHERE ${restaurantAwards.restaurantId} = ${restaurants.id}
+        ), false)`,
+        cuisines: this.cuisinesAggSql,
+        facilities: this.facilitiesAggSql,
+        priceLevel: restaurants.priceLevel,
+      })
+      .from(restaurants)
+      .innerJoin(cities, eq(cities.id, restaurants.cityId))
+      .innerJoin(countries, eq(countries.id, cities.countryId))
+      .where(eq(restaurants.id, id))
+      .limit(1);
+
+    if (!result) {
+      throw new NotFoundException('Restaurant not found');
     }
-    const safe = trimmed.replace(/[%_]/g, '');
-    return safe || undefined;
+
+    return result as RestaurantDetailsDto;
   };
 
-  private buildAutocompletePattern = (q: string | undefined) => {
+  autocompleteCountries = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
+    this.autocompleteOptions({
+      table: countries,
+      idColumn: countries.id,
+      nameColumn: countries.name,
+      q,
+      limit,
+    });
+
+  autocompleteCities = (
+    q: string | undefined,
+    limit: number,
+    countryId?: number,
+  ): Promise<AutocompleteOptionDto[]> =>
+    this.autocompleteOptions({
+      table: cities,
+      idColumn: cities.id,
+      nameColumn: cities.name,
+      additionalWhere: countryId ? eq(cities.countryId, countryId) : undefined,
+      q,
+      limit,
+    });
+
+  autocompleteCuisines = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
+    this.autocompleteOptions({
+      table: cuisines,
+      idColumn: cuisines.id,
+      nameColumn: cuisines.name,
+      normalizedColumn: cuisines.normalizedName,
+      q,
+      limit,
+    });
+
+  autocompleteFacilities = (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> =>
+    this.autocompleteOptions({
+      table: facilities,
+      idColumn: facilities.id,
+      nameColumn: facilities.name,
+      normalizedColumn: facilities.normalizedName,
+      q,
+      limit,
+    });
+
+  private readonly cuisinesAggSql = sql<string[]>`coalesce((
+    SELECT array_agg(${cuisines.name} ORDER BY ${cuisines.name})
+    FROM ${restaurantCuisines}
+    INNER JOIN ${cuisines} ON ${cuisines.id} = ${restaurantCuisines.cuisineId}
+    WHERE ${restaurantCuisines.restaurantId} = ${restaurants.id}
+  ), ARRAY[]::text[])`;
+
+  private readonly facilitiesAggSql = sql<string[]>`coalesce((
+    SELECT array_agg(${facilities.name} ORDER BY ${facilities.name})
+    FROM ${restaurantFacilities}
+    INNER JOIN ${facilities} ON ${facilities.id} = ${restaurantFacilities.facilityId}
+    WHERE ${restaurantFacilities.restaurantId} = ${restaurants.id}
+  ), ARRAY[]::text[])`;
+
+  private getTextClause = ({ search }: SearchRestaurantsQueryDto): SQL | undefined => {
+    const trimmed = search?.trim();
+    if (!trimmed) return undefined;
+    return or(ilike(restaurants.name, `%${trimmed}%`), ilike(restaurants.description, `%${trimmed}%`));
+  };
+
+  private getCityClause = ({ cityId }: SearchRestaurantsQueryDto): SQL | undefined =>
+    cityId !== undefined && cityId !== null ? eq(cities.id, cityId) : undefined;
+
+  private getCountryClause = ({ countryId }: SearchRestaurantsQueryDto): SQL | undefined =>
+    countryId !== undefined && countryId !== null ? eq(cities.countryId, countryId) : undefined;
+
+  private getCuisinesClause = ({ cuisineIds }: SearchRestaurantsQueryDto): SQL | undefined =>
+    cuisineIds?.length
+      ? inArray(
+          restaurants.id,
+          this.databaseService.db
+            .select({ id: restaurantCuisines.restaurantId })
+            .from(restaurantCuisines)
+            .where(inArray(restaurantCuisines.cuisineId, cuisineIds)),
+        )
+      : undefined;
+
+  private getFacilitiesClause = ({ facilityIds }: SearchRestaurantsQueryDto): SQL | undefined =>
+    facilityIds?.length
+      ? inArray(
+          restaurants.id,
+          this.databaseService.db
+            .select({ id: restaurantFacilities.restaurantId })
+            .from(restaurantFacilities)
+            .where(inArray(restaurantFacilities.facilityId, facilityIds)),
+        )
+      : undefined;
+
+  /**
+   * Award filter: when `minStars`/`maxStars` is set without `awardCode`, implicitly restricts
+   * to MICHELIN_STAR awards (Bib Gourmand / Selected have no stars, so the filter would always
+   * return 0 results otherwise).
+   */
+  private getAwardsClause = ({ awardCode, minStars, maxStars }: SearchRestaurantsQueryDto): SQL | undefined => {
+    const hasStarsFilter = minStars !== undefined || maxStars !== undefined;
+    const trimmedCode = awardCode?.trim();
+    if (!hasStarsFilter && !trimmedCode) return undefined;
+
+    const effectiveCode = trimmedCode ?? (hasStarsFilter ? MICHELIN_STAR_CODE : undefined);
+
+    const clauses = [
+      effectiveCode ? eq(awardTypes.code, effectiveCode) : undefined,
+      minStars !== undefined ? sql`${restaurantAwards.starsCount} >= ${minStars}` : undefined,
+      maxStars !== undefined ? sql`${restaurantAwards.starsCount} <= ${maxStars}` : undefined,
+    ].filter((clause): clause is SQL => Boolean(clause));
+
+    return inArray(
+      restaurants.id,
+      this.databaseService.db
+        .select({ id: restaurantAwards.restaurantId })
+        .from(restaurantAwards)
+        .innerJoin(awardTypes, eq(awardTypes.id, restaurantAwards.awardTypeId))
+        .where(and(...clauses)),
+    );
+  };
+
+  private getGreenStarClause = ({ greenStar }: SearchRestaurantsQueryDto): SQL | undefined => {
+    if (greenStar === undefined) return undefined;
+    const withGreen = this.databaseService.db
+      .select({ id: restaurantAwards.restaurantId })
+      .from(restaurantAwards)
+      .innerJoin(awardTypes, eq(awardTypes.id, restaurantAwards.awardTypeId))
+      .where(eq(awardTypes.code, GREEN_STAR_CODE));
+    return greenStar ? inArray(restaurants.id, withGreen) : notInArray(restaurants.id, withGreen);
+  };
+
+  private getPricesClause = ({ minPriceLevel, maxPriceLevel }: SearchRestaurantsQueryDto): SQL | undefined => {
+    const clauses = [
+      minPriceLevel ? sql`${restaurants.priceLevel} >= ${minPriceLevel}` : undefined,
+      maxPriceLevel ? sql`${restaurants.priceLevel} <= ${maxPriceLevel}` : undefined,
+    ].filter((clause): clause is SQL => Boolean(clause));
+    return clauses.length > 0 ? and(...clauses) : undefined;
+  };
+
+  private autocompleteOptions = async (params: {
+    table: AnyPgTable;
+    idColumn: PgColumn;
+    nameColumn: PgColumn;
+    normalizedColumn?: PgColumn;
+    additionalWhere?: SQL;
+    q: string | undefined;
+    limit: number;
+  }): Promise<AutocompleteOptionDto[]> => {
+    const { table, idColumn, nameColumn, normalizedColumn, additionalWhere, q, limit } = params;
     const safe = this.getSafeAutocompleteTerm(q);
-    return safe ? `%${safe}%` : undefined;
+    const pattern = safe ? `%${safe}%` : undefined;
+
+    const nameMatch = pattern
+      ? normalizedColumn
+        ? or(ilike(nameColumn, pattern), ilike(normalizedColumn, pattern))
+        : ilike(nameColumn, pattern)
+      : undefined;
+    const whereExpr = and(...[additionalWhere, nameMatch].filter((clause): clause is SQL => Boolean(clause)));
+
+    const base = this.databaseService.db
+      .select({ id: idColumn, name: nameColumn })
+      .from(table)
+      .where(whereExpr);
+
+    const query = safe
+      ? base.orderBy(
+          asc(this.autocompleteNameMatchPriority(nameColumn, safe, { normalizedColumn })),
+          asc(nameColumn),
+        )
+      : base.orderBy(asc(nameColumn));
+
+    const rows = await query.limit(limit);
+    return rows.map(row => ({ id: row.id as number, name: row.name as string }));
+  };
+
+  private getSafeAutocompleteTerm = (q: string | undefined): string | undefined => {
+    const trimmed = q?.trim();
+    if (!trimmed) return undefined;
+    const safe = trimmed.replace(/[%_]/g, '').slice(0, 100);
+    return safe || undefined;
   };
 
   /**
@@ -135,7 +369,7 @@ export class RestaurantsService {
    * 1 = contains term but no "prefix" match (neither on full string nor on a word)
    * 2 = fallback
    */
-  private autocompleteNameTokensStartWith = (nameColumn: PgColumn, prefix: string) =>
+  private autocompleteNameTokensStartWith = (nameColumn: PgColumn, prefix: string): SQL =>
     sql`EXISTS (
       SELECT 1
       FROM unnest(
@@ -185,225 +419,5 @@ export class RestaurantsService {
         ELSE 2
       END
     )`;
-  };
-
-  autocompleteCountries = async (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> => {
-    const pattern = this.buildAutocompletePattern(q);
-    const safe = this.getSafeAutocompleteTerm(q);
-    const query = this.databaseService.db
-      .select({ id: countries.id, name: countries.name })
-      .from(countries)
-      .where(pattern ? ilike(countries.name, pattern) : undefined);
-    if (safe) {
-      return query
-        .orderBy(asc(this.autocompleteNameMatchPriority(countries.name, safe)), asc(countries.name))
-        .limit(limit)
-        .then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-    }
-    return query.orderBy(asc(countries.name)).limit(limit).then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-  };
-
-  autocompleteCities = async (
-    q: string | undefined,
-    limit: number,
-    countryId?: number,
-  ): Promise<AutocompleteOptionDto[]> => {
-    const pattern = this.buildAutocompletePattern(q);
-    const safe = this.getSafeAutocompleteTerm(q);
-    const byCountry = countryId !== undefined && countryId !== null ? eq(cities.countryId, countryId) : undefined;
-    const byName = pattern ? ilike(cities.name, pattern) : undefined;
-    const whereExpr =
-      byCountry && byName
-        ? and(byCountry, byName)
-        : byCountry
-          ? byCountry
-          : byName
-            ? byName
-            : undefined;
-    const query = this.databaseService.db.select({ id: cities.id, name: cities.name }).from(cities).where(whereExpr);
-    if (safe) {
-      return query
-        .orderBy(asc(this.autocompleteNameMatchPriority(cities.name, safe)), asc(cities.name))
-        .limit(limit)
-        .then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-    }
-    return query.orderBy(asc(cities.name)).limit(limit).then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-  };
-
-  autocompleteCuisines = async (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> => {
-    const pattern = this.buildAutocompletePattern(q);
-    const safe = this.getSafeAutocompleteTerm(q);
-    const query = this.databaseService.db
-      .select({ id: cuisines.id, name: cuisines.name })
-      .from(cuisines)
-      .where(
-        pattern
-          ? or(ilike(cuisines.name, pattern), ilike(cuisines.normalizedName, pattern))
-          : undefined,
-      );
-    if (safe) {
-      return query
-        .orderBy(
-          asc(
-            this.autocompleteNameMatchPriority(cuisines.name, safe, { normalizedColumn: cuisines.normalizedName }),
-          ),
-          asc(cuisines.name),
-        )
-        .limit(limit)
-        .then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-    }
-    return query.orderBy(asc(cuisines.name)).limit(limit).then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-  };
-
-  autocompleteFacilities = async (q: string | undefined, limit: number): Promise<AutocompleteOptionDto[]> => {
-    const pattern = this.buildAutocompletePattern(q);
-    const safe = this.getSafeAutocompleteTerm(q);
-    const query = this.databaseService.db
-      .select({ id: facilities.id, name: facilities.name })
-      .from(facilities)
-      .where(
-        pattern
-          ? or(ilike(facilities.name, pattern), ilike(facilities.normalizedName, pattern))
-          : undefined,
-      );
-    if (safe) {
-      return query
-        .orderBy(
-          asc(
-            this.autocompleteNameMatchPriority(facilities.name, safe, { normalizedColumn: facilities.normalizedName }),
-          ),
-          asc(facilities.name),
-        )
-        .limit(limit)
-        .then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-    }
-    return query.orderBy(asc(facilities.name)).limit(limit).then(rows => rows.map(r => ({ id: r.id, name: r.name })));
-  };
-
-  getRestaurantById = async (id: number) => {
-    const [result] = await this.databaseService.db
-      .select({
-        id: restaurants.id,
-        name: restaurants.name,
-        address: restaurants.address,
-        description: restaurants.description,
-        sourceUrl: restaurants.sourceUrl,
-        websiteUrl: restaurants.websiteUrl,
-        latitude: restaurants.latitude,
-        longitude: restaurants.longitude,
-        phoneNumber: restaurants.phoneNumber,
-        createdAt: restaurants.createdAt,
-        city: cities.name,
-        country: countries.name,
-        stars: sql<number | null>`max(${restaurantAwards.starsCount})`,
-        hasGreenStar: sql<boolean>`bool_or(${awardTypes.code} = 'GREEN_STAR')`,
-        cuisines: sql<string[]>`array_remove(array_agg(distinct ${cuisines.name}), null)`,
-        facilities: sql<string[]>`array_remove(array_agg(distinct ${facilities.name}), null)`,
-        priceLevel: restaurants.priceLevel,
-      })
-      .from(restaurants)
-      .innerJoin(cities, eq(cities.id, restaurants.cityId))
-      .innerJoin(countries, eq(countries.id, cities.countryId))
-      .leftJoin(restaurantAwards, eq(restaurantAwards.restaurantId, restaurants.id))
-      .leftJoin(restaurantCuisines, eq(restaurantCuisines.restaurantId, restaurants.id))
-      .leftJoin(cuisines, eq(cuisines.id, restaurantCuisines.cuisineId))
-      .leftJoin(restaurantFacilities, eq(restaurantFacilities.restaurantId, restaurants.id))
-      .leftJoin(facilities, eq(facilities.id, restaurantFacilities.facilityId))
-      .where(eq(restaurants.id, id))
-      .groupBy(restaurants.id, cities.name, countries.name, restaurants.priceLevel)
-      .limit(1);
-
-    if (!result) {
-      throw new NotFoundException('Restaurant not found');
-    }
-
-    return result;
-  };
-
-  private getTextClause = ({ search }: SearchRestaurantsQueryDto) =>
-    search?.trim()
-      ? or(ilike(restaurants.name, `%${search}%`), ilike(restaurants.description, `%${search}%`))
-      : undefined;
-
-  private getCityClause = (query: SearchRestaurantsQueryDto) => {
-    if (query.cityId !== undefined && query.cityId !== null) {
-      return eq(cities.id, query.cityId);
-    }
-    return undefined;
-  };
-
-  private getCountryClause = (query: SearchRestaurantsQueryDto) => {
-    if (query.countryId !== undefined && query.countryId !== null) {
-      return eq(cities.countryId, query.countryId);
-    }
-    return undefined;
-  };
-
-  private getCuisinesClause = (query: SearchRestaurantsQueryDto) =>
-    query.cuisineIds?.length
-      ? inArray(
-          restaurants.id,
-          this.databaseService.db
-            .select({ id: restaurantCuisines.restaurantId })
-            .from(restaurantCuisines)
-            .where(inArray(restaurantCuisines.cuisineId, query.cuisineIds)),
-        )
-      : undefined;
-
-  private getFacilitiesClause = (query: SearchRestaurantsQueryDto) =>
-    query.facilityIds?.length
-      ? inArray(
-          restaurants.id,
-          this.databaseService.db
-            .select({ id: restaurantFacilities.restaurantId })
-            .from(restaurantFacilities)
-            .where(inArray(restaurantFacilities.facilityId, query.facilityIds)),
-        )
-      : undefined;
-
-  private getAwardsClause = (query: SearchRestaurantsQueryDto) => {
-    const { awardCode, minStars, maxStars } = query;
-    const awardClauses = [
-      awardCode?.trim() ? eq(awardTypes.code, awardCode.trim()) : undefined,
-      minStars ? sql`${restaurantAwards.starsCount} >= ${minStars}` : undefined,
-      maxStars ? sql`${restaurantAwards.starsCount} <= ${maxStars}` : undefined,
-    ].filter(Boolean);
-
-    if (!awardClauses.length) {
-      return undefined;
-    }
-
-    return inArray(
-      restaurants.id,
-      this.databaseService.db
-        .select({ id: restaurantAwards.restaurantId })
-        .from(restaurantAwards)
-        .innerJoin(awardTypes, eq(awardTypes.id, restaurantAwards.awardTypeId))
-        .where(and(...awardClauses)),
-    );
-  };
-
-  private getGreenStarClause = (query: SearchRestaurantsQueryDto) => {
-    if (query.greenStar === undefined) {
-      return undefined;
-    }
-    const withGreen = this.databaseService.db
-      .select({ id: restaurantAwards.restaurantId })
-      .from(restaurantAwards)
-      .innerJoin(awardTypes, eq(awardTypes.id, restaurantAwards.awardTypeId))
-      .where(eq(awardTypes.code, 'GREEN_STAR'));
-    if (query.greenStar) {
-      return inArray(restaurants.id, withGreen);
-    }
-    return notInArray(restaurants.id, withGreen);
-  };
-
-  private getPricesClause = ({ minPriceLevel, maxPriceLevel }: SearchRestaurantsQueryDto) => {
-    const priceClauses = [
-      minPriceLevel ? sql`${restaurants.priceLevel} >= ${minPriceLevel}` : undefined,
-      maxPriceLevel ? sql`${restaurants.priceLevel} <= ${maxPriceLevel}` : undefined,
-    ].filter(Boolean);
-
-    return priceClauses.length > 0 ? and(...priceClauses) : undefined;
   };
 }

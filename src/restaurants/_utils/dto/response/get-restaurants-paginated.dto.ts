@@ -1,30 +1,13 @@
+import { ApiProperty } from '@nestjs/swagger';
 import { PaginatedQueryDto } from 'src/_utils/dto/requests/paginated-query.dto';
 import { PaginationDto } from 'src/_utils/dto/responses/pagination.dto';
-
-type RestaurantSearchItem = {
-  id: number;
-  name: string;
-  address: string;
-  description: string;
-  sourceUrl: string;
-  websiteUrl: string | null;
-  latitude: string;
-  longitude: string;
-  phoneNumber: string | null;
-  createdAt: Date;
-  city: string;
-  country: string;
-  stars: number | null;
-  hasGreenStar: boolean;
-  cuisines: string[];
-  facilities: string[];
-  priceLevel: number | null;
-};
+import { RestaurantSearchItemDto } from './restaurant-search-item.dto';
 
 export class GetRestaurantsPaginatedDto extends PaginationDto {
-  restaurants: RestaurantSearchItem[];
+  @ApiProperty({ type: [RestaurantSearchItemDto] })
+  restaurants: RestaurantSearchItemDto[];
 
-  constructor(restaurants: RestaurantSearchItem[], paginatedQuery: PaginatedQueryDto, totalItemsCount: number) {
+  constructor(restaurants: RestaurantSearchItemDto[], paginatedQuery: PaginatedQueryDto, totalItemsCount: number) {
     super(paginatedQuery, totalItemsCount);
     this.restaurants = restaurants;
   }

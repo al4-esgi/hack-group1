@@ -71,12 +71,22 @@ export class SearchRestaurantsQueryDto extends PaginatedQueryDto {
   @Optional()
   facilityIds?: number[];
 
-  @ApiPropertyOptional({ description: 'Award code filter.', example: 'MICHELIN_STAR' })
+  @ApiPropertyOptional({
+    description:
+      'Main award code filter (MICHELIN_STAR, BIB_GOURMAND, SELECTED). Use `greenStar` to filter on the green star add-on.',
+    example: 'MICHELIN_STAR',
+  })
   @IsString()
   @Optional()
   awardCode?: string;
 
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 3, description: 'Minimum Michelin stars.' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    minimum: 1,
+    maximum: 3,
+    description:
+      'Minimum Michelin stars. Implicitly restricts to MICHELIN_STAR awards when `awardCode` is not set.',
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
@@ -84,7 +94,13 @@ export class SearchRestaurantsQueryDto extends PaginatedQueryDto {
   @Optional()
   minStars?: number;
 
-  @ApiPropertyOptional({ type: 'integer', minimum: 1, maximum: 3, description: 'Maximum Michelin stars.' })
+  @ApiPropertyOptional({
+    type: 'integer',
+    minimum: 1,
+    maximum: 3,
+    description:
+      'Maximum Michelin stars. Implicitly restricts to MICHELIN_STAR awards when `awardCode` is not set.',
+  })
   @Type(() => Number)
   @IsInt()
   @Min(1)
