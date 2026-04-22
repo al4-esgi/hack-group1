@@ -1,43 +1,44 @@
-import { Body, Controller, HttpCode, Post } from '@nestjs/common';
-import { ApiOperation, ApiTags } from '@nestjs/swagger';
-import { CreateUserDto } from 'src/users/_utils/dto/request/create-user.dto';
-import { UsersService } from 'src/users/users.service';
-import { ConfirmRecoverAccountPasswordDto } from './_utils/dto/request/confirm-recover-account-password.dto';
-import { LoginDto } from './_utils/dto/request/login.dto';
-import { RecoverAccountPasswordDto } from './_utils/dto/request/recover-account-password.dto';
-import { AuthService } from './auth.service';
+import {
+  Body,
+  Controller,
+  Get,
+  HttpCode,
+  Post,
+  Req,
+  Res,
+  UseGuards,
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { AuthGuard } from "@nestjs/passport";
+import { ApiOperation,  ApiTags } from "@nestjs/swagger";
+import { Request, Response } from "express";
+import { UsersService } from "src/users/users.service";
+import { EnvironmentVariables } from "../_utils/config/env.config";
+import { AuthService } from "./auth.service";
 
-@ApiTags('Auth')
-@Controller('auth')
+@ApiTags("Auth")
+@Controller("auth")
 export class AuthController {
   constructor(
     private authService: AuthService,
-    private readonly usersService: UsersService,
+    private readonly configService: ConfigService<EnvironmentVariables, true>,
   ) {}
 
-  @Post('register')
-  @ApiOperation({ summary: 'Register user.' })
-  register(@Body() body: CreateUserDto) {
-    // return this.usersService.createUser(body);
+  @Get("google")
+  @UseGuards(AuthGuard("google"))
+  @ApiOperation({ summary: "Initiate Google OAuth2 login flow" })
+  async googleAuth() {
+    // initiates Google OAuth2 login flow
   }
 
-  @Post('login')
-  @ApiOperation({ summary: 'Login user.' })
-  login(@Body() body: LoginDto) {
-    // return this.authService.login(body);
-  }
+  @Get("google/callback")
+  @UseGuards(AuthGuard("google"))
+  @ApiOperation({ summary: "Google OAuth2 callback" })
+  async googleAuthRedirect(@Req() req: Request, @Res() res: Response) {
+    const user = await this.authService.validateGoogleLogin(req.user as any);
+    const jwt = this.authService.generateJwt(user);
 
-  @HttpCode(204)
-  @Post('recover-password')
-  @ApiOperation({ summary: 'Send a mail with a recovery link.' })
-  recoverAccountPassword(@Body() body: RecoverAccountPasswordDto) {
-    // return this.authService.recoverAccountPassword(body);
-  }
-
-  @HttpCode(204)
-  @Post('confirm-recover-password')
-  @ApiOperation({ summary: 'Confirm the recover password with token' })
-  confirmRecoverAccountPassword(@Body() body: ConfirmRecoverAccountPasswordDto) {
-    // return this.authService.confirmRecoverAccountPassword(body);
+    const frontUrl = this.configService.get("FRONT_URL");
+    res.redirect(`${frontUrl}/auth/callback#token=${encodeURIComponent(jwt)}`);
   }
 }

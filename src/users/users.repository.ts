@@ -1,65 +1,54 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { CreateUserDto } from './_utils/dto/request/create-user.dto';
-import { EncryptionService } from 'src/encryption/encryption.service';
-import { DATABASE_CLIENT_TOKEN } from 'src/database/database.providers';
-import { schema } from 'src/database/database.schema';
-import { DatabaseService } from 'src/database/database.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { schema } from "src/database/database.schema";
+import { DatabaseService } from "src/database/database.service";
+import { eq } from "drizzle-orm";
+import { UserRoleEnum } from "./_utils/user-role.enum";
 
 @Injectable()
 export class UsersRepository {
-  private readonly orFailNotFound = new NotFoundException('User not found');
+  private readonly orFailNotFound = new NotFoundException("User not found");
 
   constructor(
-    private readonly  databaseService: DatabaseService,
-    private readonly encryptionService: EncryptionService,
+    private readonly databaseService: DatabaseService,
   ) {}
 
-  // findOneById = (id: string) => this.model.findById(id).exec();
-  //
-  // findOneByIdOrThrow = (id: string) => this.model.findById(id).orFail(this.orFailNotFound).exec();
-  //
-  // findOneByEmailOrThrow = (email: string) =>
-  //   this.model.findOne({ email: email, deletedAt: null }).orFail(this.orFailNotFound).exec();
-  //
-  // findOneByTokenOrThrow = (token: string) =>
-  //   this.model
-  //     .findOne({ recoveryToken: token, recoveryTokenExpires: { $gt: new Date() }, deletedAt: null })
-  //     .orFail(this.orFailNotFound)
-  //     .exec();
-  //
-  // updatePasswordById = async (id: Types.ObjectId, password: string) => {
-  //   const hashedPassword = await this.encryptionService.encrypt(password);
-  //   return this.model
-  //     .findByIdAndUpdate(id, {
-  //       password: hashedPassword,
-  //       recoveryToken: null,
-  //       recoveryTokenExpires: null,
-  //     })
-  //     .exec();
-  // };
-  //
-  // userWithEmailExists = (email: string) => this.model.exists({ email: email, deletedAt: null }).exec();
-  //
-  // recoverAccountPassword = (email: string) =>
-  //   this.model
-  //     .findOneAndUpdate(
-  //       { email: email },
-  //       { recoveryToken: randomStringGenerator(), recoveryTokenExpires: dayjs().add(5, 'm').toDate() },
-  //       { returnDocument: 'after' },
-  //     )
-  //     .orFail(this.orFailNotFound)
-  //     .exec();
+  async findByGoogleId(googleId: string) {
+    const users = await this.databaseService.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.google_id, googleId))
+      .limit(1);
 
-  async createUser(createUserDto: CreateUserDto) {
-    const hashPassword = await this.encryptionService.encrypt(createUserDto.password);
+    return users[0] || null;
+  }
 
-    return this.databaseService.db.insert(schema.user).values({
-      email: createUserDto.email,
-      firstname: createUserDto.firstname,
-      lastname: createUserDto.lastname,
-      password: hashPassword,
-    }).returning()
+  async findById(id: number) {
+    const users = await this.databaseService.db
+      .select()
+      .from(schema.user)
+      .where(eq(schema.user.id, id))
+      .limit(1);
+
+    return users[0] || null;
+  }
+
+  async createGoogleUser(profile: {
+    googleId: string;
+    email: string;
+    firstname: string;
+    lastname: string;
+  }) {
+    return this.databaseService.db
+      .insert(schema.user)
+      .values({
+        email: profile.email,
+        firstname: profile.firstname,
+        lastname: profile.lastname || "",
+        google_id: profile.googleId,
+        role: UserRoleEnum.USER
+      })
+      .returning()
+      .then((users) => users[0]);
   }
 
   // deleteUser = (userToDelete: UserDocument) =>

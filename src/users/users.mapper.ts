@@ -1,18 +1,16 @@
-import { GetUserDto } from './_utils/dto/response/get-user.dto';
-import { SelectUser  } from './users.entity';
 import { Injectable } from '@nestjs/common';
-import { PaginatedQueryDto } from '../_utils/dto/requests/paginated-query.dto';
-import { GetUserLightDto } from './_utils/dto/response/get-user-light.dto';
-import { GetUsersPaginatedDto } from './_utils/dto/response/get-users-paginated.dto';
+import { GetUserType } from './users.entity';
+import { GetUserDto } from './_utils/dto/response/get-user.dto';
 
 @Injectable()
 export class UsersMapper {
-  // toGetUserDto = (user: SelectUser): GetUserDto => ({
-  //   id: user.id.toString(),
-  //   email: user.email,
-  //   firstname: user.firstname,
-  //   lastname: user.lastname,
-  // });
+  toGetUserDto = (user: GetUserType): GetUserDto => ({
+    id: user.id.toString(),
+    email: user.email,
+    firstname: user.firstname,
+    lastname: user.lastname,
+  });
+
   //
   // toGetUserLightDto = (user: SelectUser): GetUserLightDto => ({
   //   id: user.id.toString(),
