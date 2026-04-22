@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1776763557140,
+      "tag": "0000_uneven_pete_wisdom",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776763600000,
+      "tag": "0001_hotel_table",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1776862964181,
+      "tag": "0002_previous_ravenous",
+      "breakpoints": true
+    }
+  ]
+}

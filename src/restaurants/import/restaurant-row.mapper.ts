@@ -1,5 +1,12 @@
-import { type MainAwardCode } from 'src/restaurants/_constants';
-import { normalizeAward, normalizeKey, normalizeLabel, normalizeLocation, normalizePrice, splitCommaList } from './normalizers';
+import { type MainAwardCode } from "src/restaurants/_constants";
+import {
+  normalizeAward,
+  normalizeKey,
+  normalizeLabel,
+  normalizeLocation,
+  normalizePrice,
+  splitCommaList,
+} from "./normalizers";
 
 export type RestaurantRowMapped = {
   name: string;
@@ -19,9 +26,11 @@ export type RestaurantRowMapped = {
   normalizedCuisineKeys: string[];
 };
 
-const GREEN_STAR_TRUE_VALUES = new Set(['1', 'true', 'yes', 'y', 'oui']);
+const GREEN_STAR_TRUE_VALUES = new Set(["1", "true", "yes", "y", "oui"]);
 
-export const mapRestaurantRow = (row: Record<string, string>): RestaurantRowMapped => {
+export const mapRestaurantRow = (
+  row: Record<string, string>,
+): RestaurantRowMapped => {
   const cuisines = splitCommaList(row.Cuisine);
   return {
     name: normalizeLabel(row.Name),
@@ -35,9 +44,11 @@ export const mapRestaurantRow = (row: Record<string, string>): RestaurantRowMapp
     sourceUrl: normalizeLabel(row.Url),
     websiteUrl: row.WebsiteUrl ? normalizeLabel(row.WebsiteUrl) : null,
     award: normalizeAward(row.Award),
-    greenStar: GREEN_STAR_TRUE_VALUES.has(normalizeLabel(row.GreenStar).toLowerCase()),
+    greenStar: GREEN_STAR_TRUE_VALUES.has(
+      normalizeLabel(row.GreenStar).toLowerCase(),
+    ),
     facilities: splitCommaList(row.FacilitiesAndServices),
-    description: row.Description?.trim() ?? '',
+    description: row.Description?.trim() ?? "",
     normalizedCuisineKeys: cuisines.map(normalizeKey),
   };
 };

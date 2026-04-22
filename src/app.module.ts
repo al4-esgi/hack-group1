@@ -9,6 +9,7 @@ import { NodemailerModule } from './nodemailer/nodemailer.module';
 import { DatabaseModule } from './database/database.module';
 import { RestaurantsModule } from './restaurants/restaurants.module';
 import { BootstrapService } from './bootstrap.service';
+import { HotelsModule } from './hotels/hotels.module';
 
 @Module({
   imports: [
@@ -18,6 +19,8 @@ import { BootstrapService } from './bootstrap.service';
     UsersModule,
     NodemailerModule,
     RestaurantsModule,
+    DatabaseModule,
+    HotelsModule,
   ],
   controllers: [AppController],
   providers: [AppService, BootstrapService],
