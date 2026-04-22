@@ -33,7 +33,7 @@ export class GoogleStrategy extends PassportStrategy(Strategy, "google") {
 		profile: Profile,
 		done: VerifyCallback,
 	): Promise<any> {
-    const user = this.usersService.upsertUserFromGoogle(profile)
+		const user = await this.usersService.upsertUserFromGoogle(profile);
 
 		done(null, user);
 	}
