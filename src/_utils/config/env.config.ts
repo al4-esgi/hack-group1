@@ -12,6 +12,9 @@ export class EnvironmentVariables {
   FRONT_URL: string = "http://localhost:3000";
 
   @IsString()
+  MOBILE_REDIRECT_URI: string
+
+  @IsString()
   JWT_SECRET: string = "mY-SUp3r-S3cr3t[JwT]*T0k3n";
 
   @IsString()
