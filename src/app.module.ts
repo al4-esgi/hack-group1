@@ -13,6 +13,7 @@ import { BootstrapService } from "./bootstrap.service";
 import { HotelsModule } from "./hotels/hotels.module";
 import { SearchModule } from "./search/search.module";
 import { TikTokScrapingModule } from "./tiktok-scraping/tiktok-scraping.module";
+import { RestaurantListsModule } from "./restaurant-lists/restaurant-lists.module";
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { TikTokScrapingModule } from "./tiktok-scraping/tiktok-scraping.module";
     HotelsModule,
     SearchModule,
     InstagramScrapingModule,
+    RestaurantListsModule,
   ],
   controllers: [AppController],
   providers: [AppService, BootstrapService],

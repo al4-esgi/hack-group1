@@ -21,9 +21,13 @@ import {
   tiktokPost,
   tiktokSourceTypeEnum,
 } from "src/tiktok-scraping/tiktok-post.entity";
+import { restaurantListRestaurants } from "src/restaurant-lists/restaurant-list-restaurants.entity";
+import { restaurantLists } from "src/restaurant-lists/restaurant-lists.entity";
 
 export const schema = {
   user,
+  restaurantLists,
+  restaurantListRestaurants,
   countries,
   cities,
   restaurants,
