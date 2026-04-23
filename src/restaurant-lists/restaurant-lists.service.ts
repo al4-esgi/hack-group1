@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { GetUserType } from 'src/users/users.entity';
 import { UserRoleEnum } from 'src/users/_utils/user-role.enum';
+import { AddListItemDto } from './_utils/dto/request/add-list-item.dto';
 import { CreateRestaurantListDto } from './_utils/dto/request/create-restaurant-list.dto';
 import { RenameRestaurantListDto } from './_utils/dto/request/rename-restaurant-list.dto';
 import { RestaurantListContentDto } from './_utils/dto/response/restaurant-list-content.dto';
@@ -18,6 +19,7 @@ import { RestaurantListsRepository } from './restaurant-lists.repository';
 export class RestaurantListsService {
   private readonly listNotFound = new NotFoundException('List not found');
   private readonly restaurantNotFound = new NotFoundException('Restaurant not found');
+  private readonly hotelNotFound = new NotFoundException('Hotel not found');
   private readonly listNameAlreadyExists = new BadRequestException('A list with this name already exists');
 
   constructor(
@@ -44,8 +46,8 @@ export class RestaurantListsService {
       throw this.listNotFound;
     }
 
-    const restaurants = await this.restaurantListsRepository.findRestaurantsByListId(list.id);
-    return this.restaurantListsMapper.toRestaurantListContentDto(list, restaurants);
+    const items = await this.restaurantListsRepository.findItemsByListId(list.id);
+    return this.restaurantListsMapper.toRestaurantListContentDto(list, items);
   }
 
   async getListContentByName(
@@ -61,8 +63,8 @@ export class RestaurantListsService {
       throw this.listNotFound;
     }
 
-    const restaurants = await this.restaurantListsRepository.findRestaurantsByListId(list.id);
-    return this.restaurantListsMapper.toRestaurantListContentDto(list, restaurants);
+    const items = await this.restaurantListsRepository.findItemsByListId(list.id);
+    return this.restaurantListsMapper.toRestaurantListContentDto(list, items);
   }
 
   async createList(
@@ -139,12 +141,63 @@ export class RestaurantListsService {
       throw this.listNotFound;
     }
 
-    const restaurantExists = await this.restaurantListsRepository.restaurantExists(restaurantId);
-    if (!restaurantExists) {
+    const restaurant = await this.restaurantListsRepository.findRestaurantById(restaurantId);
+    if (!restaurant) {
       throw this.restaurantNotFound;
     }
 
     await this.restaurantListsRepository.addRestaurantToList(listId, restaurantId);
+  }
+
+  async addListItem(
+    userId: number,
+    listId: number,
+    dto: AddListItemDto,
+    connectedUser: GetUserType,
+  ): Promise<void> {
+    this.assertUserCanAccessLists(userId, connectedUser);
+
+    const existingList = await this.restaurantListsRepository.findListById(userId, listId);
+    if (!existingList) {
+      throw this.listNotFound;
+    }
+
+    const itemType = dto.itemType;
+    if (itemType === 'restaurant') {
+      const restaurant = await this.restaurantListsRepository.findRestaurantById(dto.itemId);
+      if (!restaurant) {
+        throw this.restaurantNotFound;
+      }
+
+      await this.restaurantListsRepository.addRestaurantToList(listId, restaurant.id);
+      return;
+    }
+
+    if (itemType === 'hotel') {
+      const hotel = await this.restaurantListsRepository.findHotelById(dto.itemId);
+      if (!hotel) {
+        throw this.hotelNotFound;
+      }
+
+      await this.restaurantListsRepository.addGenericItemToList(
+        listId,
+        itemType,
+        hotel.id,
+        hotel.name,
+      );
+      return;
+    }
+
+    if (!dto.name) {
+      throw new BadRequestException('name is required for custom item types');
+    }
+
+    await this.restaurantListsRepository.addGenericItemToList(
+      listId,
+      itemType,
+      dto.itemId,
+      dto.name,
+    );
   }
 
   private assertUserCanAccessLists(userId: number, connectedUser: GetUserType): void {

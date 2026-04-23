@@ -24,11 +24,13 @@ import {
 import { restaurantListRestaurants } from "src/restaurant-lists/restaurant-list-restaurants.entity";
 import { restaurantLists } from "src/restaurant-lists/restaurant-lists.entity";
 import { restaurantImages } from "src/restaurants/entities/restaurant-images.entity";
+import { restaurantListItems } from "src/restaurant-lists/restaurant-list-items.entity";
 
 export const schema = {
   user,
   restaurantLists,
   restaurantListRestaurants,
+  restaurantListItems,
   countries,
   cities,
   restaurants,

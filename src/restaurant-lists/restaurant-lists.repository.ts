@@ -1,5 +1,5 @@
 import { Injectable, InternalServerErrorException } from '@nestjs/common';
-import { and, asc, desc, eq, sql } from 'drizzle-orm';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { schema } from 'src/database/database.schema';
 import { DatabaseService } from 'src/database/database.service';
 import { SelectRestaurantList } from './restaurant-lists.entity';
@@ -12,8 +12,9 @@ export interface RestaurantListWithItemsCountRow {
   itemsCount: number;
 }
 
-export interface RestaurantListRestaurantRow {
-  id: number;
+export interface RestaurantListItemRow {
+  itemType: string;
+  itemId: number;
   name: string;
   addedAt: Date;
 }
@@ -29,20 +30,22 @@ export class RestaurantListsRepository {
         name: schema.restaurantLists.name,
         createdAt: schema.restaurantLists.createdAt,
         updatedAt: schema.restaurantLists.updatedAt,
-        itemsCount: sql<number>`cast(count(${schema.restaurantListRestaurants.restaurantId}) as int)`,
+        itemsCount: sql<number>`(
+          cast((
+            select count(*)
+            from ${schema.restaurantListRestaurants}
+            where ${schema.restaurantListRestaurants.listId} = ${schema.restaurantLists.id}
+          ) as int)
+          +
+          cast((
+            select count(*)
+            from ${schema.restaurantListItems}
+            where ${schema.restaurantListItems.listId} = ${schema.restaurantLists.id}
+          ) as int)
+        )`,
       })
       .from(schema.restaurantLists)
-      .leftJoin(
-        schema.restaurantListRestaurants,
-        eq(schema.restaurantListRestaurants.listId, schema.restaurantLists.id),
-      )
       .where(eq(schema.restaurantLists.userId, userId))
-      .groupBy(
-        schema.restaurantLists.id,
-        schema.restaurantLists.name,
-        schema.restaurantLists.createdAt,
-        schema.restaurantLists.updatedAt,
-      )
       .orderBy(asc(schema.restaurantLists.createdAt));
   }
 
@@ -76,10 +79,12 @@ export class RestaurantListsRepository {
     return lists[0] ?? null;
   }
 
-  findRestaurantsByListId(listId: number): Promise<RestaurantListRestaurantRow[]> {
-    return this.databaseService.db
+  async findItemsByListId(listId: number): Promise<RestaurantListItemRow[]> {
+    const [restaurantItems, genericItems] = await Promise.all([
+      this.databaseService.db
       .select({
-        id: schema.restaurants.id,
+        itemType: sql<string>`'restaurant'`,
+        itemId: schema.restaurants.id,
         name: schema.restaurants.name,
         addedAt: schema.restaurantListRestaurants.addedAt,
       })
@@ -88,29 +93,66 @@ export class RestaurantListsRepository {
         schema.restaurants,
         eq(schema.restaurants.id, schema.restaurantListRestaurants.restaurantId),
       )
-      .where(eq(schema.restaurantListRestaurants.listId, listId))
-      .orderBy(desc(schema.restaurantListRestaurants.addedAt));
+      .where(eq(schema.restaurantListRestaurants.listId, listId)),
+      this.databaseService.db
+      .select({
+        itemType: schema.restaurantListItems.itemType,
+        itemId: schema.restaurantListItems.itemId,
+        name: schema.restaurantListItems.name,
+        addedAt: schema.restaurantListItems.addedAt,
+      })
+      .from(schema.restaurantListItems)
+      .where(eq(schema.restaurantListItems.listId, listId)),
+    ]);
+
+    return [...restaurantItems, ...genericItems].sort(
+      (a, b) => b.addedAt.getTime() - a.addedAt.getTime(),
+    );
   }
 
   async countItemsByListId(listId: number): Promise<number> {
-    const [result] = await this.databaseService.db
+    const [restaurantCountResult, genericCountResult] = await Promise.all([
+      this.databaseService.db
       .select({
         count: sql<number>`cast(count(${schema.restaurantListRestaurants.restaurantId}) as int)`,
       })
       .from(schema.restaurantListRestaurants)
-      .where(eq(schema.restaurantListRestaurants.listId, listId));
+      .where(eq(schema.restaurantListRestaurants.listId, listId)),
+      this.databaseService.db
+      .select({
+        count: sql<number>`cast(count(${schema.restaurantListItems.id}) as int)`,
+      })
+      .from(schema.restaurantListItems)
+      .where(eq(schema.restaurantListItems.listId, listId)),
+    ]);
 
-    return result?.count ?? 0;
+    return (restaurantCountResult[0]?.count ?? 0) + (genericCountResult[0]?.count ?? 0);
   }
 
-  async restaurantExists(restaurantId: number): Promise<boolean> {
+  async findRestaurantById(restaurantId: number): Promise<{ id: number; name: string } | null> {
     const restaurants = await this.databaseService.db
-      .select({ id: schema.restaurants.id })
+      .select({
+        id: schema.restaurants.id,
+        name: schema.restaurants.name,
+      })
       .from(schema.restaurants)
       .where(eq(schema.restaurants.id, restaurantId))
       .limit(1);
 
-    return restaurants.length > 0;
+    return restaurants[0] ?? null;
+  }
+
+  async findHotelById(hotelId: number): Promise<{ id: number; name: string } | null> {
+    const hotels = await this.databaseService.db
+      .select({
+        id: schema.hotel.id,
+        name: schema.hotel.name,
+      })
+      .from(schema.hotel)
+      .where(eq(schema.hotel.id, hotelId))
+      .limit(1);
+
+    return hotels[0] ?? null;
   }
 
   async createList(userId: number, name: string, normalizedName: string): Promise<SelectRestaurantList> {
@@ -177,6 +219,29 @@ export class RestaurantListsRepository {
         target: [
           schema.restaurantListRestaurants.listId,
           schema.restaurantListRestaurants.restaurantId,
+        ],
+      });
+  }
+
+  async addGenericItemToList(
+    listId: number,
+    itemType: string,
+    itemId: number,
+    name: string,
+  ): Promise<void> {
+    await this.databaseService.db
+      .insert(schema.restaurantListItems)
+      .values({
+        listId,
+        itemType,
+        itemId,
+        name,
+      })
+      .onConflictDoNothing({
+        target: [
+          schema.restaurantListItems.listId,
+          schema.restaurantListItems.itemType,
+          schema.restaurantListItems.itemId,
         ],
       });
   }

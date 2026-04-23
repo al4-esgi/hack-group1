@@ -17,6 +17,7 @@ import {
   restaurantAwards,
   restaurantCuisines,
   restaurantFacilities,
+  restaurantImages,
   restaurants,
 } from 'src/restaurants/entities';
 import { UnifiedSearchQueryDto, UnifiedSearchSortBy } from './_utils/dto/request/unified-search.query.dto';
@@ -288,6 +289,13 @@ export class SearchService {
         jsonb_build_object(
           'description', ${restaurants.description},
           'sourceUrl', ${restaurants.sourceUrl},
+          'firstImageUrl', (
+            SELECT ${restaurantImages.imageUrl}
+            FROM ${restaurantImages}
+            WHERE ${restaurantImages.restaurantId} = ${restaurants.id}
+            ORDER BY ${restaurantImages.id}
+            LIMIT 1
+          ),
           'websiteUrl', ${restaurants.websiteUrl},
           'phoneNumber', ${restaurants.phoneNumber},
           'awardCode', agg_awards.award_code,
@@ -427,6 +435,7 @@ export class SearchService {
       address: row.address ?? '',
       description: details.description ?? '',
       sourceUrl: details.sourceUrl ?? '',
+      firstImageUrl: details.firstImageUrl ?? null,
       websiteUrl: details.websiteUrl ?? null,
       latitude: row.lat ?? '',
       longitude: row.lng ?? '',

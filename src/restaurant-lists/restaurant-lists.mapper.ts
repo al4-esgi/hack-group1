@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
 import { RestaurantListContentDto } from './_utils/dto/response/restaurant-list-content.dto';
+import { RestaurantListItemDto } from './_utils/dto/response/restaurant-list-item.dto';
 import { RestaurantListDto } from './_utils/dto/response/restaurant-list.dto';
-import { RestaurantListRestaurantDto } from './_utils/dto/response/restaurant-list-restaurant.dto';
 import {
-  RestaurantListRestaurantRow,
+  RestaurantListItemRow,
   RestaurantListWithItemsCountRow,
 } from './restaurant-lists.repository';
 import { SelectRestaurantList } from './restaurant-lists.entity';
@@ -28,18 +28,19 @@ export class RestaurantListsMapper {
 
   toRestaurantListContentDto = (
     list: SelectRestaurantList,
-    restaurants: RestaurantListRestaurantRow[],
+    items: RestaurantListItemRow[],
   ): RestaurantListContentDto => ({
     id: list.id,
     name: list.name,
-    restaurants: restaurants.map(this.toRestaurantListRestaurantDto),
+    items: items.map(this.toRestaurantListItemDto),
   });
 
-  toRestaurantListRestaurantDto = (
-    restaurant: RestaurantListRestaurantRow,
-  ): RestaurantListRestaurantDto => ({
-    id: restaurant.id,
-    name: restaurant.name,
-    addedAt: restaurant.addedAt,
+  toRestaurantListItemDto = (
+    item: RestaurantListItemRow,
+  ): RestaurantListItemDto => ({
+    itemType: item.itemType,
+    itemId: item.itemId,
+    name: item.name,
+    addedAt: item.addedAt,
   });
 }

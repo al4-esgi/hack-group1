@@ -1,8 +1,11 @@
 import { ApiProperty } from '@nestjs/swagger';
 
-export class RestaurantListRestaurantDto {
+export class RestaurantListItemDto {
+  @ApiProperty({ example: 'hotel' })
+  itemType: string;
+
   @ApiProperty({ example: 42 })
-  id: number;
+  itemId: number;
 
   @ApiProperty({ example: 'Le Jules Verne' })
   name: string;

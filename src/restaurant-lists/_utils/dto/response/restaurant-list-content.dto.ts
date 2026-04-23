@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { RestaurantListRestaurantDto } from './restaurant-list-restaurant.dto';
+import { RestaurantListItemDto } from './restaurant-list-item.dto';
 
 export class RestaurantListContentDto {
   @ApiProperty({ example: 1 })
@@ -8,6 +8,6 @@ export class RestaurantListContentDto {
   @ApiProperty({ example: 'liked' })
   name: string;
 
-  @ApiProperty({ type: [RestaurantListRestaurantDto] })
-  restaurants: RestaurantListRestaurantDto[];
+  @ApiProperty({ type: [RestaurantListItemDto] })
+  items: RestaurantListItemDto[];
 }

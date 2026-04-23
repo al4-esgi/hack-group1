@@ -20,13 +20,14 @@ import {
 import { Protect } from 'src/auth/_utils/decorator/protect.decorator';
 import { ConnectedUser } from 'src/users/_utils/decorator/connecter-user.decorator';
 import { GetUserType } from 'src/users/users.entity';
+import { AddListItemDto } from './_utils/dto/request/add-list-item.dto';
 import { CreateRestaurantListDto } from './_utils/dto/request/create-restaurant-list.dto';
 import { RenameRestaurantListDto } from './_utils/dto/request/rename-restaurant-list.dto';
 import { RestaurantListContentDto } from './_utils/dto/response/restaurant-list-content.dto';
 import { RestaurantListDto } from './_utils/dto/response/restaurant-list.dto';
 import { RestaurantListsService } from './restaurant-lists.service';
 
-@ApiTags('Restaurant Lists')
+@ApiTags('Lists')
 @Protect()
 @Controller('users/:userId/lists')
 export class RestaurantListsController {
@@ -43,10 +44,10 @@ export class RestaurantListsController {
     return this.restaurantListsService.getListsByUserId(userId, connectedUser);
   }
 
-  @Get('by-name/:listName/restaurants')
+  @Get(['by-name/:listName/items', 'by-name/:listName/restaurants'])
   @ApiParam({ type: 'number', name: 'userId' })
   @ApiParam({ type: 'string', name: 'listName' })
-  @ApiOperation({ summary: 'List restaurants in a list by list name' })
+  @ApiOperation({ summary: 'List items in a list by list name' })
   @ApiOkResponse({ type: RestaurantListContentDto })
   getListContentByName(
     @Param('userId', ParseIntPipe) userId: number,
@@ -60,10 +61,10 @@ export class RestaurantListsController {
     );
   }
 
-  @Get(':listId/restaurants')
+  @Get([':listId/items', ':listId/restaurants'])
   @ApiParam({ type: 'number', name: 'userId' })
   @ApiParam({ type: 'number', name: 'listId' })
-  @ApiOperation({ summary: 'List restaurants in a list by list ID' })
+  @ApiOperation({ summary: 'List items in a list by list ID' })
   @ApiOkResponse({ type: RestaurantListContentDto })
   getListContentById(
     @Param('userId', ParseIntPipe) userId: number,
@@ -132,5 +133,20 @@ export class RestaurantListsController {
       restaurantId,
       connectedUser,
     );
+  }
+
+  @Post(':listId/items')
+  @HttpCode(204)
+  @ApiParam({ type: 'number', name: 'userId' })
+  @ApiParam({ type: 'number', name: 'listId' })
+  @ApiOperation({ summary: 'Add an item (restaurant, hotel, or custom type) to a user list' })
+  @ApiNoContentResponse({ description: 'Item added to list.' })
+  addListItem(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Param('listId', ParseIntPipe) listId: number,
+    @Body() dto: AddListItemDto,
+    @ConnectedUser() connectedUser: GetUserType,
+  ): Promise<void> {
+    return this.restaurantListsService.addListItem(userId, listId, dto, connectedUser);
   }
 }

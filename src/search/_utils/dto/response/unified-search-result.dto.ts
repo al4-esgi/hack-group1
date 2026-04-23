@@ -73,6 +73,9 @@ export class UnifiedRestaurantItemDto {
   @ApiProperty({ example: 'https://guide.michelin.com/...' })
   sourceUrl: string;
 
+  @ApiProperty({ type: String, nullable: true, example: 'https://cdn.example.com/restaurant-1.jpg' })
+  firstImageUrl: string | null;
+
   @ApiProperty({ type: String, nullable: true })
   websiteUrl: string | null;
 
