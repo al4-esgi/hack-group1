@@ -13,16 +13,11 @@ import {
 } from "drizzle-orm";
 import type { AnyPgTable, PgColumn } from "drizzle-orm/pg-core";
 import { DatabaseService } from "src/database/database.service";
-import { SortDirection } from "src/_utils/dto/requests/paginated-query.dto";
 import { GREEN_STAR_CODE, MICHELIN_STAR_CODE } from "./_constants";
 import {
-  RestaurantSearchSortBy,
   SearchRestaurantsQueryDto,
 } from "./_utils/dto/request/search-restaurants.query.dto";
-import { AutocompleteOptionDto } from "./_utils/dto/response/autocomplete-option.dto";
-import { GetRestaurantsPaginatedDto } from "./_utils/dto/response/get-restaurants-paginated.dto";
 import { RestaurantDetailsDto } from "./_utils/dto/response/restaurant-details.dto";
-import { RestaurantSearchItemDto } from "./_utils/dto/response/restaurant-search-item.dto";
 import {
   awardTypes,
   cities,
@@ -35,6 +30,8 @@ import {
   restaurants,
   restaurantImages,
 } from "./entities";
+import { AutocompleteHelper } from "src/_shared/autocomplete/autocomplete.helper";
+import { AutocompleteOptionDto } from "src/_utils/dto/responses/autocomplete-option.dto";
 
 @Injectable()
 export class RestaurantsService {

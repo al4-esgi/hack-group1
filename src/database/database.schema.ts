@@ -58,4 +58,3 @@ export type { GetTikTokPostType } from "src/tiktok-scraping/tiktok-post.entity";
 export type Schema = typeof schema;
 export type SchemaName = keyof Schema;
 
-export type { GetUserType } from "src/users/users.entity";

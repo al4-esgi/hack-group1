@@ -28,6 +28,7 @@ export class BootstrapService implements OnApplicationBootstrap {
       }
 
       await this.backfillGeoLocations();
+      await this.importImages()
       this.logger.log('Startup bootstrap tasks completed.');
     } catch (error) {
       const fatalMessage = this.getFatalStartupMessage(error);
@@ -37,6 +38,33 @@ export class BootstrapService implements OnApplicationBootstrap {
       }
       throw error;
     }
+  }
+
+  private async importImages() {
+    const imagesCsvPath = `${process.cwd()}/restaurant_images.csv`;
+      const imagesSourceName =
+        imagesCsvPath.split("/").pop() ?? "restaurant_images.csv";
+      const imagesSourceHash =
+        await this.restaurantImportService.getFileHash(imagesCsvPath);
+      const imagesAlreadyDone =
+        await this.restaurantImportService.hasSuccessfulImageImport(
+          imagesSourceName,
+          imagesSourceHash,
+        );
+      if (!imagesAlreadyDone) {
+        this.logger.log("Launching restaurant images import...");
+        await this.restaurantImportService.runImageImport(imagesCsvPath);
+      } else {
+        this.logger.log(
+          "Restaurant images import skipped: same file hash already imported successfully.",
+        );
+      }
+
+      const assignedCount =
+        await this.restaurantImportService.assignRandomImagesToRestaurantsWithoutImages();
+      this.logger.log(
+        `Random image assignment complete: ${assignedCount} restaurants updated.`,
+      );
   }
 
   private async backfillGeoLocations(): Promise<void> {
