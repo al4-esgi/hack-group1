@@ -17,6 +17,7 @@ import { RestaurantListsRepository } from './restaurant-lists.repository';
 @Injectable()
 export class RestaurantListsService {
   private readonly listNotFound = new NotFoundException('List not found');
+  private readonly restaurantNotFound = new NotFoundException('Restaurant not found');
   private readonly listNameAlreadyExists = new BadRequestException('A list with this name already exists');
 
   constructor(
@@ -123,6 +124,27 @@ export class RestaurantListsService {
     }
 
     await this.restaurantListsRepository.deleteList(userId, listId);
+  }
+
+  async addRestaurantToList(
+    userId: number,
+    listId: number,
+    restaurantId: number,
+    connectedUser: GetUserType,
+  ): Promise<void> {
+    this.assertUserCanAccessLists(userId, connectedUser);
+
+    const existingList = await this.restaurantListsRepository.findListById(userId, listId);
+    if (!existingList) {
+      throw this.listNotFound;
+    }
+
+    const restaurantExists = await this.restaurantListsRepository.restaurantExists(restaurantId);
+    if (!restaurantExists) {
+      throw this.restaurantNotFound;
+    }
+
+    await this.restaurantListsRepository.addRestaurantToList(listId, restaurantId);
   }
 
   private assertUserCanAccessLists(userId: number, connectedUser: GetUserType): void {

@@ -103,6 +103,16 @@ export class RestaurantListsRepository {
     return result?.count ?? 0;
   }
 
+  async restaurantExists(restaurantId: number): Promise<boolean> {
+    const restaurants = await this.databaseService.db
+      .select({ id: schema.restaurants.id })
+      .from(schema.restaurants)
+      .where(eq(schema.restaurants.id, restaurantId))
+      .limit(1);
+
+    return restaurants.length > 0;
+  }
+
   async createList(userId: number, name: string, normalizedName: string): Promise<SelectRestaurantList> {
     const lists = await this.databaseService.db
       .insert(schema.restaurantLists)
@@ -154,5 +164,20 @@ export class RestaurantListsRepository {
           eq(schema.restaurantLists.userId, userId),
         ),
       );
+  }
+
+  async addRestaurantToList(listId: number, restaurantId: number): Promise<void> {
+    await this.databaseService.db
+      .insert(schema.restaurantListRestaurants)
+      .values({
+        listId,
+        restaurantId,
+      })
+      .onConflictDoNothing({
+        target: [
+          schema.restaurantListRestaurants.listId,
+          schema.restaurantListRestaurants.restaurantId,
+        ],
+      });
   }
 }

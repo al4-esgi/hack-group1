@@ -112,4 +112,25 @@ export class RestaurantListsController {
   ): Promise<void> {
     return this.restaurantListsService.deleteList(userId, listId, connectedUser);
   }
+
+  @Post(':listId/restaurants/:restaurantId')
+  @HttpCode(204)
+  @ApiParam({ type: 'number', name: 'userId' })
+  @ApiParam({ type: 'number', name: 'listId' })
+  @ApiParam({ type: 'number', name: 'restaurantId' })
+  @ApiOperation({ summary: 'Add a restaurant to a user list' })
+  @ApiNoContentResponse({ description: 'Restaurant added to list.' })
+  addRestaurantToList(
+    @Param('userId', ParseIntPipe) userId: number,
+    @Param('listId', ParseIntPipe) listId: number,
+    @Param('restaurantId', ParseIntPipe) restaurantId: number,
+    @ConnectedUser() connectedUser: GetUserType,
+  ): Promise<void> {
+    return this.restaurantListsService.addRestaurantToList(
+      userId,
+      listId,
+      restaurantId,
+      connectedUser,
+    );
+  }
 }
