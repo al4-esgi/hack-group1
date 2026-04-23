@@ -1,6 +1,6 @@
-import { hotels } from 'src/hotels/hotels.entity';
-import { hotelAmenities } from 'src/hotels/hotel-amenities.entity';
-import { hotelHotelAmenities } from 'src/hotels/hotel-hotel-amenities.entity';
+import { hotels } from "src/hotels/hotels.entity";
+import { hotelAmenities } from "src/hotels/hotel-amenities.entity";
+import { hotelHotelAmenities } from "src/hotels/hotel-hotel-amenities.entity";
 import { awardTypes } from "src/restaurants/entities/award-types.entity";
 import { cities } from "src/restaurants/entities/cities.entity";
 import { countries } from "src/restaurants/entities/countries.entity";
@@ -12,6 +12,10 @@ import { restaurantCuisines } from "src/restaurants/entities/restaurant-cuisines
 import { restaurantFacilities } from "src/restaurants/entities/restaurant-facilities.entity";
 import { restaurants } from "src/restaurants/entities/restaurants.entity";
 import { user } from "src/users/users.entity";
+import {
+  tiktokPost,
+  tiktokSourceTypeEnum,
+} from "src/tiktok-scraping/tiktok-post.entity";
 
 export const schema = {
   user,
@@ -25,14 +29,15 @@ export const schema = {
   awardTypes,
   restaurantAwards,
   ingestionLogs,
+  tiktokPost,
+  tiktokSourceTypeEnum,
   hotel: hotels,
   hotelAmenities,
   hotelHotelAmenities,
 };
 
 export type { GetUserType } from "src/users/users.entity";
+export type { GetTikTokPostType } from "src/tiktok-scraping/tiktok-post.entity";
 
 export type Schema = typeof schema;
 export type SchemaName = keyof Schema;
-
-export type { SelectHotel } from 'src/hotels/hotels.entity';

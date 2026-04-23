@@ -11,6 +11,7 @@ import { RestaurantsModule } from './restaurants/restaurants.module';
 import { BootstrapService } from './bootstrap.service';
 import { HotelsModule } from './hotels/hotels.module';
 import { SearchModule } from './search/search.module';
+import { TikTokScrapingModule } from './tiktok-scraping/tiktok-scraping.module';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { SearchModule } from './search/search.module';
     UsersModule,
     NodemailerModule,
     RestaurantsModule,
+    TikTokScrapingModule,
     HotelsModule,
     SearchModule,
   ],
