@@ -12,7 +12,7 @@ export class EnvironmentVariables {
   FRONT_URL: string = "http://localhost:3000";
 
   @IsString()
-  MOBILE_REDIRECT_URI: string
+  MOBILE_REDIRECT_URI: string;
 
   @IsString()
   JWT_SECRET: string = "mY-SUp3r-S3cr3t[JwT]*T0k3n";
@@ -47,6 +47,10 @@ export class EnvironmentVariables {
   SMTP_PREVIEW: boolean = false;
 
   @IsString()
+  @Optional()
+  APIFY_TOKEN?: string;
+
+  @IsString()
   GOOGLE_CLIENT_ID: string;
 
   @IsString()
@@ -64,7 +68,6 @@ export function validateEnv(config: Record<string, unknown>) {
   const errors = validateSync(validatedConfig, {
     skipMissingProperties: false,
   });
-
   if (errors.length) {
     new Logger(validateEnv.name).error(errors.toString());
     exit();

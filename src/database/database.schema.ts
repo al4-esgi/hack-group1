@@ -13,6 +13,11 @@ import { restaurantFacilities } from "src/restaurants/entities/restaurant-facili
 import { restaurants } from "src/restaurants/entities/restaurants.entity";
 import { user } from "src/users/users.entity";
 import {
+  instagramPost,
+  instagramPostTypeEnum,
+  instagramSourceTypeEnum,
+} from "src/instagram-scraping/instagram-post.entity";
+import {
   tiktokPost,
   tiktokSourceTypeEnum,
 } from "src/tiktok-scraping/tiktok-post.entity";
@@ -34,9 +39,14 @@ export const schema = {
   hotel: hotels,
   hotelAmenities,
   hotelHotelAmenities,
+  instagramPost,
+  instagramPostTypeEnum,
+  instagramSourceTypeEnum,
 };
 
 export type { GetUserType } from "src/users/users.entity";
+export type { SelectHotel } from "src/hotels/hotels.entity";
+export type { SelectInstagramPost } from "src/instagram-scraping/instagram-post.entity";
 export type { GetTikTokPostType } from "src/tiktok-scraping/tiktok-post.entity";
 
 export type Schema = typeof schema;
