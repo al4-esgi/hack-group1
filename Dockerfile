@@ -23,6 +23,8 @@ RUN apt-get update && apt-get install -y curl && \
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# S'assurer que node_modules n'est pas écrasé ou est un dossier valide
+RUN mkdir -p node_modules
 RUN pnpm run build
 # On ne garde que les dépendances de prod pour l'image finale
 RUN pnpm install --prod --frozen-lockfile
